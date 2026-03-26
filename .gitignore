@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local workspace and temporary files
+*.code-workspace
+tmp_*
+tmp_api_check/
+tmp_server_patch/
