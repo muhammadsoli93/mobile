@@ -1,138 +1,109 @@
-import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kumarket/config/UI/app_text_styles.dart';
 import 'package:kumarket/config/router/routers.dart';
 import 'package:kumarket/presentation/widgets/app_button.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(),
-      body: const LoginScreenBody(),
-    );
-  }
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class LoginScreenBody extends StatelessWidget {
-  const LoginScreenBody({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(30.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'Введите номер телефона',
-            style: AppTextStyles.s32w600h000000,
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Text(
-              'Мы отправим вам код подтверждения на этот номер',
-              style: AppTextStyles.s12w400hB2B2B2,
-            ),
-          ),
-          const WidgetPhoneNumber(),
-          const Spacer(),
-          const WidgetBottom(),
-        ],
-      ),
-    );
-  }
-}
-
-class WidgetPhoneNumber extends StatefulWidget {
-  const WidgetPhoneNumber({super.key});
-
-  @override
-  State<WidgetPhoneNumber> createState() => _WidgetPhoneNumberState();
-}
-
-class _WidgetPhoneNumberState extends State<WidgetPhoneNumber> {
-  late TextEditingController _textEditingController ;
-
-  final _maskFormater = MaskTextInputFormatter(
-    mask: '+ 7 ### ### ## ##',
-    filter: {"#": RegExp(r'[0-9]')},
+class _LoginScreenState extends State<LoginScreen> {
+  final _phoneController = TextEditingController();
+  final _maskFormatter = MaskTextInputFormatter(
+    mask: '+7 ### ### ## ##',
+    filter: {'#': RegExp(r'[0-9]')},
     type: MaskAutoCompletionType.lazy,
   );
 
-  @override
-  void initState() {
-   _textEditingController = TextEditingController();
-    super.initState();
-  }
+  bool get _isValidPhone => _maskFormatter.getUnmaskedText().length == 10;
+
   @override
   void dispose() {
-    _textEditingController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: _textEditingController,
-      keyboardType: TextInputType.number,
-      decoration: const InputDecoration(hintText: '+7 984 112 23 45'),
-      inputFormatters: [_maskFormater],
+    return Scaffold(
+      appBar: AppBar(),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              const Text(
+                'Введите номер телефона',
+                style: AppTextStyles.h1,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Мы отправим код подтверждения в SMS',
+                style: AppTextStyles.s14w400hB2B2B2,
+              ),
+              const SizedBox(height: 18),
+              TextField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [_maskFormatter],
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  hintText: '+7 777 777 77 77',
+                ),
+              ),
+              const Spacer(),
+              const _AgreementLinks(),
+              const SizedBox(height: 10),
+              AppButton.main(
+                title: 'Получить SMS',
+                onTap: _isValidPhone
+                    ? () => context.pushNamed(Routers.pathCodeSmsScreen)
+                    : null,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
 
-class WidgetBottom extends StatelessWidget {
-  const WidgetBottom({super.key});
+class _AgreementLinks extends StatelessWidget {
+  const _AgreementLinks();
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: RichText(
-            textAlign: TextAlign.center,
-            text: TextSpan(
-              text:
-                  'Нажимая кнопку "Получить СМС", я подтверждаю, что ознакомлен(а) с условиями',
-              style: AppTextStyles.s12w400hB2B2B2,
-              children: [
-                TextSpan(
-                  text: ' Публичной оферты',
-                  style: AppTextStyles.s12w400hB2B2B2Underline,
-                  recognizer: TapGestureRecognizer()
-                    ..onTap =
-                        () => context.pushNamed(Routers.pathPublicOfferScreen),
-                ),
-                TextSpan(
-                  text: ' и',
-                  style: AppTextStyles.s12w400hB2B2B2,
-                ),
-                TextSpan(
-                  text: ' Политики конфиденциальности',
-                  style: AppTextStyles.s12w400hB2B2B2Underline,
-                  recognizer: TapGestureRecognizer()
-                    ..onTap = () =>
-                        context.pushNamed(Routers.pathPrivacyPoliciesScreen),
-                ),
-                TextSpan(
-                  text: ' и принимаю их условия',
-                  style: AppTextStyles.s12w400hB2B2B2,
-                ),
-              ],
-            ),
+        const Text(
+          'Продолжая, вы принимаете ',
+          style: AppTextStyles.s12w400hB2B2B2,
+          textAlign: TextAlign.center,
+        ),
+        GestureDetector(
+          onTap: () => context.pushNamed(Routers.pathPublicOfferScreen),
+          child: const Text(
+            'Публичную оферту',
+            style: AppTextStyles.s12w400hB2B2B2Underline,
           ),
         ),
-        AppButton.main(
-          title: 'Получить СМС',
-          onTap: () {
-            context.pushNamed(Routers.pathCodeSmsScreen);
-          },
+        const Text(
+          ' и ',
+          style: AppTextStyles.s12w400hB2B2B2,
+        ),
+        GestureDetector(
+          onTap: () => context.pushNamed(Routers.pathPrivacyPoliciesScreen),
+          child: const Text(
+            'Политику конфиденциальности',
+            style: AppTextStyles.s12w400hB2B2B2Underline,
+          ),
         ),
       ],
     );

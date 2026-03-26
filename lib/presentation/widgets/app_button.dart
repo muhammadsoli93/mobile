@@ -4,16 +4,16 @@ import 'package:kumarket/config/UI/app_text_styles.dart';
 
 class AppButton extends StatelessWidget {
   final String title;
-  final void Function() onTap;
+  final VoidCallback? onTap;
   final Color color;
 
-  AppButton.main({
+  const AppButton.main({
     super.key,
     required this.title,
     required this.onTap,
   }) : color = AppColors.hex0968F5;
 
-  AppButton.second({
+  const AppButton.second({
     super.key,
     required this.title,
     required this.onTap,
@@ -23,15 +23,15 @@ class AppButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ElevatedButton(
       style: ButtonStyle(
-        backgroundColor: WidgetStateProperty.all(
+        backgroundColor: WidgetStatePropertyAll(
           color,
         ),
-        minimumSize: WidgetStateProperty.all(
-          const Size(double.infinity, 52),
+        minimumSize: const WidgetStatePropertyAll(
+          Size(double.infinity, 52),
         ),
-        shape: WidgetStateProperty.all(
+        shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
       ),

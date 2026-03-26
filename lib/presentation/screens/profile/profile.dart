@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kumarket/config/UI/app_assets.dart';
 import 'package:kumarket/config/UI/app_colors.dart';
@@ -11,80 +11,102 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(),
-      body: const ProfileScreenBodyNoAuth(),
-    );
-  }
-}
-
-class ProfileScreenBodyNoAuth extends StatelessWidget {
-  const ProfileScreenBodyNoAuth({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 30),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         children: [
-          Image.asset(AppAssets.imageNoAvatar),
-          const SizedBox(height: 40),
-          Text(
-            'Вы не авторизовались',
-            style: AppTextStyles.s32w600h000000,
-            textAlign: TextAlign.center,
+          const Text(
+            'Профиль',
+            style: AppTextStyles.h1,
           ),
-          Text(
-            'На ваш профиль действуют ограничения',
-            style: AppTextStyles.s14w400hB2B2B2,
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            child: AppButton.main(
-              title: 'Войти',
-              onTap: () => context.pushNamed(Routers.pathLoginScreen),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.hexFFFFFF,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              children: [
+                Image.asset(
+                  AppAssets.imageNoAvatar,
+                  width: 120,
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Вы не авторизованы',
+                  style: AppTextStyles.h2,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Войдите, чтобы отслеживать заказы и получать бонусы',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.s14w400hB2B2B2,
+                ),
+                const SizedBox(height: 14),
+                AppButton.main(
+                  title: 'Войти',
+                  onTap: () => context.pushNamed(Routers.pathLoginScreen),
+                ),
+              ],
             ),
           ),
-          const CardButton(
+          const SizedBox(height: 12),
+          const _SettingTile(
+            icon: Icons.language_rounded,
             title: 'Язык',
-            text: 'Русский',
+            value: 'Русский',
           ),
-          const CardButton(
+          const _SettingTile(
+            icon: Icons.payments_outlined,
             title: 'Валюта',
-            text: 'Ru',
-          )
+            value: 'Тенге (₸)',
+          ),
+          const _SettingTile(
+            icon: Icons.support_agent_rounded,
+            title: 'Поддержка',
+            value: '24/7',
+          ),
         ],
       ),
     );
   }
 }
 
-class CardButton extends StatelessWidget {
-  const CardButton({super.key, required this.text, required this.title});
+class _SettingTile extends StatelessWidget {
+  const _SettingTile({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
+
+  final IconData icon;
   final String title;
-  final String text;
+  final String value;
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.hexFFFFFF,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            title,
-            style: AppTextStyles.s16w600h000000,
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-            decoration: BoxDecoration(
-              color: AppColors.hexF3F3F3,
-              borderRadius: BorderRadius.circular(48),
-            ),
+          Icon(icon, color: AppColors.hex99A6B8),
+          const SizedBox(width: 10),
+          Expanded(
             child: Text(
-              text,
-              style: AppTextStyles.s16w600hB2B2B2,
+              title,
+              style: AppTextStyles.s16w600h000000,
             ),
+          ),
+          Text(
+            value,
+            style: AppTextStyles.s14w400hB2B2B2,
           ),
         ],
       ),

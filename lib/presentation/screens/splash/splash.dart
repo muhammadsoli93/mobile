@@ -25,7 +25,6 @@ class SplashScreenBody extends StatefulWidget {
 }
 
 class _SplashScreenBodyState extends State<SplashScreenBody> {
-
   Future<void> redirect() async {
     await requestPermission();
     await Future.delayed(const Duration(seconds: 1));

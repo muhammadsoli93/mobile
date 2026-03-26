@@ -19,11 +19,14 @@ dependencies:
   image_picker: ^1.1.2
   permission_handler: ^11.3.1
   device_info_plus: ^11.2.0
+  http: ^1.6.0
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
@@ -31,11 +34,23 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - assets/app_icon/
 
   fonts:
-    - family: Schyler
+    - family: Gilroy
       fonts:
         - asset: assets/fonts/gilroy/Gilroy-Light.otf
-        
-   
+          weight: 300
+        - asset: assets/fonts/gilroy/Gilroy-ExtraBold.otf
+          weight: 700
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/app_icon/kumarket_icon_flat_bg_90.png
+  adaptive_icon_foreground: assets/app_icon/kumarket_icon_flat_fg_90.png
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground_inset: 10
+  min_sdk_android: 21
+  remove_alpha_ios: true
 

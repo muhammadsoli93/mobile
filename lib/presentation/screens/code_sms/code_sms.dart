@@ -1,142 +1,115 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_timer_countdown/flutter_timer_countdown.dart';
 import 'package:go_router/go_router.dart';
+import 'package:kumarket/config/UI/app_colors.dart';
 import 'package:kumarket/config/UI/app_text_styles.dart';
 import 'package:kumarket/config/router/routers.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
-class CodeSmsScreen extends StatelessWidget {
+class CodeSmsScreen extends StatefulWidget {
   const CodeSmsScreen({super.key});
+
+  @override
+  State<CodeSmsScreen> createState() => _CodeSmsScreenState();
+}
+
+class _CodeSmsScreenState extends State<CodeSmsScreen> {
+  final _codeController = TextEditingController();
+  final _codeFormatter = MaskTextInputFormatter(
+    mask: '#####',
+    filter: {'#': RegExp(r'[0-9]')},
+    type: MaskAutoCompletionType.lazy,
+  );
+
+  bool _canResend = false;
+  DateTime _endTime = DateTime.now().add(const Duration(seconds: 30));
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  void _onResend() {
+    setState(() {
+      _canResend = false;
+      _codeController.clear();
+      _endTime = DateTime.now().add(const Duration(seconds: 30));
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(),
-      body: const CodeSmcBody(),
-    );
-  }
-}
-
-class CodeSmcBody extends StatelessWidget {
-  const CodeSmcBody({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(30),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Введите пятизначный код',
-            style: AppTextStyles.s32w600h000000,
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Text(
-              'Код был отправлен на номер +7 914 287 15 18',
-              style: AppTextStyles.s12w400hB2B2B2,
-            ),
-          ),
-          const WidgetSmsCode(),
-          const WidgetTimer(),
-        ],
-      ),
-    );
-  }
-}
-
-class WidgetSmsCode extends StatefulWidget {
-  const WidgetSmsCode({super.key});
-
-  @override
-  State<WidgetSmsCode> createState() => _WidgetSmsCodeState();
-}
-
-class _WidgetSmsCodeState extends State<WidgetSmsCode> {
-  late TextEditingController _textEditingController;
-
-  final _maskFormater = MaskTextInputFormatter(
-    mask: '#####',
-    filter: {"#": RegExp(r'[0-9]')},
-    type: MaskAutoCompletionType.lazy,
-  );
-
-  @override
-  void initState() {
-    _textEditingController = TextEditingController();
-    super.initState();
-  }
-
-  @override
-  void dispose() {
-    _textEditingController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: _textEditingController,
-      keyboardType: TextInputType.number,
-      decoration: const InputDecoration(hintText: '*****'),
-      inputFormatters: [_maskFormater],
-      onChanged: (val) {
-        if (val == '00000') {
-          context.goNamed(Routers.pathProfileCreateScreen)
-;        }
-      },
-    );
-  }
-}
-
-class WidgetTimer extends StatefulWidget {
-  const WidgetTimer({super.key});
-
-  @override
-  State<WidgetTimer> createState() => _WidgetTimerState();
-}
-
-class _WidgetTimerState extends State<WidgetTimer> {
-  var isEnabledCodeSmc = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      child: isEnabledCodeSmc
-          ? GestureDetector(
-              onTap: () {
-                setState(() => isEnabledCodeSmc = false);
-              },
-              child: Text(
-                'Отправить код',
-                style: AppTextStyles.s12w400h0968F5,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Введите код из SMS',
+                style: AppTextStyles.h1,
               ),
-            )
-          : Row(
-              children: [
-                Text(
-                  'Отправить код заново ',
-                  style: AppTextStyles.s12w400h000000,
-                ),
-                TimerCountdown(
-                  timeTextStyle: AppTextStyles.s12w400h000000,
-                  colonsTextStyle: AppTextStyles.s12w400h000000,
-                  spacerWidth: 2,
-                  enableDescriptions: false,
-                  format: CountDownTimerFormat.minutesSeconds,
-                  endTime: DateTime.now().add(
-                    const Duration(
-                      seconds: 30,
-                    ),
-                  ),
-                  onEnd: () {
-                    setState(() => isEnabledCodeSmc = true);
-                  },
+              const SizedBox(height: 8),
+              const Text(
+                'Код отправлен на указанный номер',
+                style: AppTextStyles.s14w400hB2B2B2,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _codeController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [_codeFormatter],
+                decoration: const InputDecoration(hintText: '12345'),
+                onChanged: (value) {
+                  if (_codeFormatter.getUnmaskedText().length == 5) {
+                    context.goNamed(Routers.pathProfileCreateScreen);
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              if (_canResend)
+                TextButton(
+                  onPressed: _onResend,
+                  child: const Text('Отправить код повторно'),
                 )
-              ],
-            ),
+              else
+                Row(
+                  children: [
+                    const Text(
+                      'Повторная отправка через ',
+                      style: AppTextStyles.s14w400h000000,
+                    ),
+                    TimerCountdown(
+                      endTime: _endTime,
+                      enableDescriptions: false,
+                      format: CountDownTimerFormat.minutesSeconds,
+                      timeTextStyle: AppTextStyles.s14w400h000000.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      colonsTextStyle: AppTextStyles.s14w400h000000.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      spacerWidth: 2,
+                      onEnd: () => setState(() => _canResend = true),
+                    ),
+                  ],
+                ),
+              const Spacer(),
+              const Text(
+                'Для демо: введите любые 5 цифр',
+                style: TextStyle(
+                  color: AppColors.hex99A6B8,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

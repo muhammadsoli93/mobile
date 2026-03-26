@@ -1,91 +1,99 @@
-import 'package:go_router/go_router.dart';
-import 'package:kumarket/config/router/routers.dart';
-import 'package:kumarket/presentation/screens/categories/categories.dart';
-import 'package:kumarket/presentation/screens/code_sms/code_sms.dart';
-import 'package:kumarket/presentation/screens/home/home.dart';
-import 'package:kumarket/presentation/screens/info/info.dart';
-import 'package:kumarket/presentation/screens/login/login.dart';
-import 'package:kumarket/presentation/screens/main/main.dart';
-import 'package:kumarket/presentation/screens/privacy_policies/privacy_policies.dart';
-import 'package:kumarket/presentation/screens/profile/profile.dart';
-import 'package:kumarket/presentation/screens/profile_create/profile_create.dart';
-import 'package:kumarket/presentation/screens/public_offer/public_offer.dart';
-import 'package:kumarket/presentation/screens/shoping_cart/shoping_cart.dart';
-import 'package:kumarket/presentation/screens/splash/splash.dart';
+﻿import 'package:go_router/go_router.dart';
+import 'package:kumarket/presentation/pwa_clone/auth_profile_screen.dart';
+import 'package:kumarket/presentation/pwa_clone/cart_checkout_screen.dart';
+import 'package:kumarket/presentation/pwa_clone/home_catalog_screen.dart';
+import 'package:kumarket/presentation/pwa_clone/legal_screen.dart';
+import 'package:kumarket/presentation/pwa_clone/orders_delivery_screen.dart';
+import 'package:kumarket/presentation/pwa_clone/product_screen.dart';
+import 'package:kumarket/presentation/pwa_clone/pwa_shell.dart';
 
 final router = GoRouter(
-  initialLocation: Routers.pathSplashScreen,
+  initialLocation: '/',
   routes: [
-    GoRoute(
-      path: Routers.pathSplashScreen,
-      builder: (context, state) => const SplashScreen(),
-    ),
-    GoRoute(
-      name: Routers.pathInfoScreen,
-      path: Routers.pathInfoScreen,
-      builder: (context, state) => const InfoScreen(),
-    ),
-    GoRoute(
-        name: Routers.pathLoginScreen,
-        path: Routers.pathLoginScreen,
-        builder: (context, state) => const LoginScreen(),
-        routes: [
-          GoRoute(
-            name: Routers.pathCodeSmsScreen,
-            path: Routers.pathCodeSmsScreen,
-            builder: (context, state) => const CodeSmsScreen(),
+    ShellRoute(
+      builder: (context, state, child) {
+        return PwaShellScaffold(
+          location: state.uri.path,
+          child: child,
+        );
+      },
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) => const HomeScreen(),
+        ),
+        GoRoute(
+          path: '/catalog',
+          builder: (context, state) {
+            return CatalogScreen(
+              initialCategoryId: state.uri.queryParameters['category'],
+            );
+          },
+        ),
+        GoRoute(
+          path: '/product/:id',
+          builder: (context, state) {
+            return ProductScreen(
+              routeId: state.pathParameters['id'] ?? '',
+            );
+          },
+        ),
+        GoRoute(
+          path: '/cart',
+          builder: (context, state) => const CartScreen(),
+        ),
+        GoRoute(
+          path: '/checkout',
+          builder: (context, state) => const CheckoutScreen(),
+        ),
+        GoRoute(
+          path: '/auth',
+          builder: (context, state) {
+            return AuthScreen(
+              redirectPath: state.uri.queryParameters['redirect'],
+            );
+          },
+        ),
+        GoRoute(
+          path: '/profile',
+          builder: (context, state) => const ProfileScreen(),
+        ),
+        GoRoute(
+          path: '/orders',
+          builder: (context, state) {
+            return OrdersScreen(
+              created: state.uri.queryParameters['created'] == '1',
+            );
+          },
+        ),
+        GoRoute(
+          path: '/delivery-address',
+          builder: (context, state) {
+            return DeliveryAddressScreen(
+              regionSlug: state.uri.queryParameters['region'],
+            );
+          },
+        ),
+        GoRoute(
+          path: '/privacy-policy',
+          builder: (context, state) => const LegalDocumentScreen(
+            title: 'Политика конфиденциальности',
+            body: privacyPolicyText,
           ),
-        ]),
-    GoRoute(
-      name: Routers.pathProfileCreateScreen,
-      path: Routers.pathProfileCreateScreen,
-      builder: (context, state) => const ProfileCreateScreen(),
-    ),
-    GoRoute(
-      name: Routers.pathPrivacyPoliciesScreen,
-      path: Routers.pathPrivacyPoliciesScreen,
-      builder: (context, state) => const PrivacyPoliciesScreen(),
-    ),
-    GoRoute(
-      name: Routers.pathPublicOfferScreen,
-      path: Routers.pathPublicOfferScreen,
-      builder: (context, state) => const PublicOfferScreen(),
-    ),
-    StatefulShellRoute.indexedStack(
-      builder: (context, state, navigationShell) =>
-          HomeScreen(navigationShell: navigationShell),
-      branches: [
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: Routers.pathMainScreen,
-              builder: (context, state) => const MainScreen(),
-            ),
-          ],
         ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: Routers.pathCategoriesScreen,
-              builder: (context, state) => const CategoriesScreen(),
-            ),
-          ],
+        GoRoute(
+          path: '/user-agreement',
+          builder: (context, state) => const LegalDocumentScreen(
+            title: 'Пользовательское соглашение',
+            body: userAgreementText,
+          ),
         ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: Routers.pathShopingCartScreen,
-              builder: (context, state) => const ShopingCartScreen(),
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: Routers.pathProfileScreen,
-              builder: (context, state) => const ProfileScreen(),
-            ),
-          ],
+        GoRoute(
+          path: '/sales-rules',
+          builder: (context, state) => const LegalDocumentScreen(
+            title: 'Правила продажи',
+            body: salesRulesText,
+          ),
         ),
       ],
     ),

@@ -1,30 +1,41 @@
-// // This is a basic Flutter widget test.
-// //
-// // To perform an interaction with a widget in your test, use the WidgetTester
-// // utility in the flutter_test package. For example, you can send tap and scroll
-// // gestures. You can also use WidgetTester to find child widgets in the widget
-// // tree, read text, and verify that the values of widget properties are correct.
+import 'package:flutter_test/flutter_test.dart';
+import 'package:kumarket/data/services/cart_service.dart';
+import 'package:kumarket/data/services/products_service.dart';
 
-// import 'package:flutter/material.dart';
-// import 'package:flutter_test/flutter_test.dart';
+void main() {
+  group('CartService', () {
+    late ProductsService productsService;
+    late CartService cartService;
 
-// import 'package:kumarket/main.dart';
+    setUp(() {
+      productsService = ProductsService();
+      cartService = CartService(productsService);
+    });
 
-// void main() {
-//   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-//     // Build our app and trigger a frame.
-//     await tester.pumpWidget(const MyApp());
+    test('adds and removes product quantities', () {
+      final product = productsService.products.first;
 
-//     // Verify that our counter starts at 0.
-//     expect(find.text('0'), findsOneWidget);
-//     expect(find.text('1'), findsNothing);
+      cartService.add(product);
+      cartService.add(product);
+      expect(cartService.quantityOf(product.id), 2);
+      expect(cartService.totalItems, 2);
 
-//     // Tap the '+' icon and trigger a frame.
-//     await tester.tap(find.byIcon(Icons.add));
-//     await tester.pump();
+      cartService.removeOne(product);
+      expect(cartService.quantityOf(product.id), 1);
+      expect(cartService.totalItems, 1);
 
-//     // Verify that our counter has incremented.
-//     expect(find.text('0'), findsNothing);
-//     expect(find.text('1'), findsOneWidget);
-//   });
-// }
+      cartService.removeOne(product);
+      expect(cartService.quantityOf(product.id), 0);
+      expect(cartService.totalItems, 0);
+    });
+
+    test('calculates total with delivery', () {
+      final product = productsService.products.first;
+      cartService.add(product);
+
+      expect(cartService.subtotal, product.price);
+      expect(cartService.delivery, 1490);
+      expect(cartService.total, product.price + 1490);
+    });
+  });
+}
