@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -882,6 +882,24 @@ class _RecommendationsSkeleton extends StatelessWidget {
   }
 }
 
+class _PaymentMethodOption {
+  const _PaymentMethodOption({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    this.logoAssetPath,
+    this.icon = Icons.account_balance_wallet_rounded,
+    this.enabled = true,
+  });
+
+  final String id;
+  final String title;
+  final String subtitle;
+  final String? logoAssetPath;
+  final IconData icon;
+  final bool enabled;
+}
+
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
 
@@ -890,17 +908,29 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
+  static const List<_PaymentMethodOption> _paymentMethods =
+      <_PaymentMethodOption>[
+    _PaymentMethodOption(
+      id: 'mbank',
+      title: 'MBank',
+      subtitle: 'Оплата через приложение MBank',
+      logoAssetPath: 'assets/images/payment_mbank.png',
+      icon: Icons.account_balance_wallet_rounded,
+      enabled: true,
+    ),
+  ];
+
   static const String _mbankDeeplinkBase = String.fromEnvironment(
     'MBANK_DEEPLINK_BASE',
     defaultValue: 'https://app.mbank.kg/deeplink',
   );
   static const String _mbankServiceId = String.fromEnvironment(
     'MBANK_SERVICE_ID',
-    defaultValue: '789',
+    defaultValue: '90bad204-49b7-45fd-8e2f-74d981230673',
   );
   static const bool _mbankTestMode = bool.fromEnvironment(
     'MBANK_TEST_MODE',
-    defaultValue: true,
+    defaultValue: false,
   );
   // Legacy parameter name kept for backward compatibility.
   static const String _mbankDeeplinkService = String.fromEnvironment(
@@ -908,13 +938,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   );
 
   final AppStore _app = AppStore.instance;
-  final String _paymentMethod = 'mbank';
+  late String _selectedPaymentMethod;
   String _error = '';
   bool _submitting = false;
+
+  List<_PaymentMethodOption> get _enabledPaymentMethods {
+    return _paymentMethods
+        .where((method) => method.enabled)
+        .toList(growable: false);
+  }
 
   @override
   void initState() {
     super.initState();
+    final enabledMethods = _enabledPaymentMethods;
+    _selectedPaymentMethod = enabledMethods.isNotEmpty
+        ? enabledMethods.first.id
+        : _paymentMethods.first.id;
     _app.auth.addListener(_rebuild);
     _app.cart.addListener(_rebuild);
   }
@@ -936,11 +976,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (order == null) {
       return '';
     }
-    final number = order.number.trim();
-    if (number.isNotEmpty) {
-      return number;
+    final id = order.id.trim();
+    if (id.isNotEmpty) {
+      return id;
     }
-    return order.id.trim();
+    return order.number.trim();
   }
 
   Uri? _buildMbankDeeplink(CustomerOrder? order) {
@@ -963,6 +1003,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     final account = _resolveAccount(order);
     if (account.isNotEmpty) {
+      query['PARAM1'] = account;
+      // Legacy compatibility for providers that still read `account`.
       query['account'] = account;
     }
 
@@ -992,6 +1034,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  Future<bool> _openSelectedPaymentMethod(CustomerOrder? order) {
+    switch (_selectedPaymentMethod) {
+      case 'mbank':
+        return _openMbankDeeplink(order);
+      default:
+        return Future<bool>.value(false);
+    }
+  }
+
   void _createOrder() {
     if (_submitting) {
       return;
@@ -1005,11 +1056,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       context.push('/auth?redirect=${Uri.encodeComponent('/checkout')}');
       return;
     }
+    if (_selectedPaymentMethod.trim().isEmpty) {
+      setState(() {
+        _error = 'Выберите способ оплаты.';
+      });
+      return;
+    }
     setState(() {
       _error = '';
       _submitting = true;
     });
-    final result = await _app.orders.createOrder(_paymentMethod);
+    final result = await _app.orders.createOrder(_selectedPaymentMethod);
     if (!mounted) {
       return;
     }
@@ -1020,20 +1077,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       });
       return;
     }
-    final launched = await _openMbankDeeplink(result.order);
+    final launched = await _openSelectedPaymentMethod(result.order);
     if (!mounted) {
       return;
     }
     if (!launched) {
-      final hasService = _mbankServiceId.trim().isNotEmpty ||
+      final bool hasService = _mbankServiceId.trim().isNotEmpty ||
           _mbankDeeplinkService.trim().isNotEmpty;
-      final snackBar = SnackBar(
-        content: Text(
-          hasService
-              ? 'Заказ создан, но MBANK не открылся автоматически. Проверьте установку приложения MBANK.'
-              : 'Заказ создан. Для автозапуска оплаты задайте MBANK_SERVICE_ID (или MBANK_DEEPLINK_SERVICE).',
-        ),
-      );
+      final String fallbackMessage = _selectedPaymentMethod == 'mbank'
+          ? hasService
+              ? 'Заказ создан, но MBank не открылся автоматически. Проверьте установку приложения MBank.'
+              : 'Заказ создан. Для автозапуска оплаты задайте MBANK_SERVICE_ID (или MBANK_DEEPLINK_SERVICE).'
+          : 'Заказ создан. Перенаправление в выбранный способ оплаты временно недоступно.';
+      final snackBar = SnackBar(content: Text(fallbackMessage));
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
     }
     setState(() => _submitting = false);
@@ -1043,6 +1099,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final items = _app.cart.items;
+    final paymentMethods = _enabledPaymentMethods;
     if (items.isEmpty) {
       return Container(
         color: const Color(0xFFF2F2F7),
@@ -1098,7 +1155,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'После оформления заказа откроется MBANK Payments Deeplink с параметрами service, account (номер заказа) и amount.',
+                    'После оформления заказа откроется MBANK Payments Deeplink с параметрами service, PARAM1 (номер заказа) и amount.',
                     style: TextStyle(
                       color: Color(0xFF4B5563),
                       fontSize: 13,
@@ -1151,79 +1208,173 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          Material(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(18),
-              onTap: _submitting ? null : _createOrder,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFF7B2CF5)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF3E8FF),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.account_balance_wallet_rounded,
-                        color: Color(0xFF7B2CF5),
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Мбанк',
-                            style: TextStyle(
-                              color: Color(0xFF111827),
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'Нажмите для оплаты',
-                            style: TextStyle(
-                              color: Color(0xFF6B7280),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (_submitting)
-                      const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.4,
-                          color: Color(0xFF7B2CF5),
-                        ),
-                      )
-                    else
-                      const Icon(
-                        Icons.chevron_right_rounded,
-                        color: Color(0xFF7B2CF5),
-                      ),
-                  ],
+          if (paymentMethods.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0x1F3C3C43)),
+              ),
+              child: const Text(
+                'Нет доступных способов оплаты.',
+                style: TextStyle(
+                  color: Color(0xFF6B7280),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
+            )
+          else
+            GridView.builder(
+              itemCount: paymentMethods.length,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: 1.08,
+              ),
+              itemBuilder: (context, index) {
+                final method = paymentMethods[index];
+                final isSelected = method.id == _selectedPaymentMethod;
+                return _PaymentMethodTile(
+                  method: method,
+                  selected: isSelected,
+                  disabled: _submitting,
+                  onTap: () {
+                    if (_submitting) {
+                      return;
+                    }
+                    setState(() {
+                      _selectedPaymentMethod = method.id;
+                    });
+                  },
+                );
+              },
+            ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed:
+                  _submitting || paymentMethods.isEmpty ? null : _createOrder,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF7B2CF5),
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 0,
+              ),
+              child: _submitting
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.4,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text(
+                      'Продолжить оформление',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PaymentMethodTile extends StatelessWidget {
+  const _PaymentMethodTile({
+    required this.method,
+    required this.selected,
+    required this.disabled,
+    required this.onTap,
+  });
+
+  final _PaymentMethodOption method;
+  final bool selected;
+  final bool disabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: disabled ? null : onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color:
+                  selected ? const Color(0xFF7B2CF5) : const Color(0x1F3C3C43),
+              width: selected ? 1.6 : 1,
+            ),
+            boxShadow: selected
+                ? const <BoxShadow>[
+                    BoxShadow(
+                      color: Color(0x1A7B2CF5),
+                      blurRadius: 10,
+                      offset: Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Expanded(
+                child: method.logoAssetPath == null
+                    ? Icon(
+                        method.icon,
+                        color: const Color(0xFF059669),
+                        size: 30,
+                      )
+                    : Padding(
+                        padding: const EdgeInsets.all(2),
+                        child: Image.asset(
+                          method.logoAssetPath!,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) {
+                            return Icon(
+                              method.icon,
+                              color: const Color(0xFF059669),
+                              size: 30,
+                            );
+                          },
+                        ),
+                      ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                method.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFF111827),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
