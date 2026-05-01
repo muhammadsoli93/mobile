@@ -1,4 +1,4 @@
-package com.example.kumarket
+package net.kumarket
 
 import io.flutter.embedding.android.FlutterActivity
 

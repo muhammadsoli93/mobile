@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Мы используем камеру для съемки фотографий.</string>
+	<string>Мы используем камеру для загрузки фото.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Photo Library usage</string>
+	<string>Мы используем галерею для выбора фото.</string>
 	<key>NSAppleMusicUsageDescription</key>
 	<string>This app does require access to your music library.</string>
 	<key>CFBundleDevelopmentRegion</key>
@@ -53,3 +53,4 @@
 	<true/>
 </dict>
 </plist>
+

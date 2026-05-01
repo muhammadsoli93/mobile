@@ -40,6 +40,30 @@ String toSafeString(Object? value, {String fallback = ''}) {
   return _normalizePotentialMojibake(normalized);
 }
 
+String normalizeVariantSizeLabel(Object? value) {
+  final normalized = toSafeString(value);
+  if (normalized.isEmpty) {
+    return '';
+  }
+
+  final compact = normalized.toUpperCase().replaceAll(RegExp(r'[\s_\-]+'), '');
+
+  const hiddenSizeMarkers = <String>{
+    'ONESIZE',
+    'FREESIZE',
+    'STANDARD',
+    'СТАНДАРТ',
+  };
+
+  for (final marker in hiddenSizeMarkers) {
+    if (compact == marker || compact.startsWith(marker)) {
+      return '';
+    }
+  }
+
+  return normalized;
+}
+
 String _firstNonEmptyImageUrl(Iterable<String?> candidates) {
   for (final raw in candidates) {
     final normalized = normalizeImageUrl(toSafeString(raw));
@@ -718,8 +742,8 @@ class ProductVariantModel {
       id: toSafeString(
         json['id'] ?? json['product_variant_id'] ?? json['variant_id'],
       ),
-      color: toSafeString(json['color'], fallback: 'Стандарт'),
-      size: toSafeString(json['size'], fallback: 'Стандарт'),
+      color: toSafeString(json['color']),
+      size: normalizeVariantSizeLabel(json['size']),
       price: json['price'] == null ? null : toSafeDouble(json['price']),
       quantity: hasQuantity ? toSafeInt(rawQuantity) : null,
     );
@@ -1264,9 +1288,9 @@ class CartItem {
       price: toSafeDouble(json['price']),
       image: toSafeString(json['image'], fallback: '/icon-192.png'),
       quantity: toSafeInt(json['quantity'], fallback: 1),
-      size: toSafeString(json['size']).isEmpty
+      size: normalizeVariantSizeLabel(json['size']).isEmpty
           ? null
-          : toSafeString(json['size']),
+          : normalizeVariantSizeLabel(json['size']),
       color: toSafeString(json['color']).isEmpty
           ? null
           : toSafeString(json['color']),

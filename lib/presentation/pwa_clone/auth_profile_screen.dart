@@ -537,18 +537,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final user = _app.auth.user;
-    if (user == null) {
-      return _ProfileUnauth(
-        onAuth: () =>
-            context.push('/auth?redirect=${Uri.encodeComponent('/profile')}'),
-      );
-    }
+    final isLoggedIn = user != null;
+    void onAuth() =>
+        context.push('/auth?redirect=${Uri.encodeComponent('/profile')}');
 
-    final initials =
-        _initials(user.fullName.isEmpty ? 'KuMarket' : user.fullName);
+    final userFullName = (user?.fullName ?? '').trim();
+    final userPhone = (user?.phone ?? '').trim();
+    final fullName = userFullName.isNotEmpty ? userFullName : 'Вход';
+    final phone = userPhone.isNotEmpty ? userPhone : 'Нажмите, чтобы войти';
+    final initials = _initials(fullName);
     final deliverySubtitle =
-        user.deliveryAddress?.pickupPointLabel ?? 'Не добавлен';
-    final previewPhoto = _editing ? _draftPhoto : user.photo;
+        user?.deliveryAddress?.pickupPointLabel ?? 'Добавьте адрес после входа';
+    final previewPhoto = _editing ? _draftPhoto : user?.photo;
 
     return Container(
       color: const Color(0xFFF3F4F7),
@@ -556,10 +556,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
         children: [
           _ProfileFlagHeader(
-            fullName: user.fullName,
-            phone: user.phone,
+            fullName: fullName,
+            phone: phone,
             initials: initials,
-            photo: user.photo,
+            photo: user?.photo,
             decodeDataImage: _decodeDataImage,
           ),
           if (_isSaved) const _InfoBanner(ok: true, text: 'Профиль сохранен'),
@@ -569,14 +569,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 8),
           _ProfileGroup(children: [
             _RowAction(
-              title: 'Изменить',
-              subtitle: 'Обновить имя, телефон и данные профиля',
-              icon: Icons.edit_outlined,
-              iconColor: const Color(0xFFF59E0B),
-              onTap: _startEdit,
+              title: isLoggedIn ? 'Изменить' : 'Вход',
+              subtitle: isLoggedIn
+                  ? 'Обновить имя, телефон и данные профиля'
+                  : 'Войдите, чтобы управлять профилем',
+              icon: isLoggedIn ? Icons.edit_outlined : Icons.login_rounded,
+              iconColor:
+                  isLoggedIn ? const Color(0xFFF59E0B) : const Color(0xFF7B2CF5),
+              onTap: isLoggedIn ? _startEdit : onAuth,
             ),
           ]),
-          if (_editing)
+          if (_editing && isLoggedIn)
             _EditCard(
               nameController: _nameController,
               cityController: _cityController,
@@ -674,12 +677,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: _openContacts,
             ),
             _RowAction(
-              title: 'Выход',
-              subtitle: 'Завершить текущую сессию',
-              icon: Icons.logout_rounded,
+              title: isLoggedIn ? 'Выход' : 'Вход',
+              subtitle: isLoggedIn
+                  ? 'Завершить текущую сессию'
+                  : 'Войти или зарегистрироваться',
+              icon: isLoggedIn ? Icons.logout_rounded : Icons.login_rounded,
               iconColor: const Color(0xFF60A5FA),
-              danger: true,
-              onTap: _logout,
+              danger: isLoggedIn,
+              onTap: isLoggedIn ? _logout : onAuth,
             ),
           ]),
         ],
@@ -688,6 +693,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
+// ignore: unused_element
 class _ProfileUnauth extends StatelessWidget {
   const _ProfileUnauth({required this.onAuth});
 
