@@ -315,7 +315,8 @@ class _ProductScreenState extends State<ProductScreen> {
         onRefresh: _load,
         child: ListView(
           controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 132),
           children: [
             Row(
               children: [

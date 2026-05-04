@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:kumarket/config/UI/app_scroll_behavior.dart';
 import 'package:kumarket/config/UI/app_theme.dart';
 import 'package:kumarket/config/router/router.dart';
 
@@ -12,6 +13,7 @@ class Application extends StatelessWidget {
       title: 'KUMarket',
       routerConfig: router,
       theme: appTheme,
+      scrollBehavior: const AppScrollBehavior(),
     );
   }
 }

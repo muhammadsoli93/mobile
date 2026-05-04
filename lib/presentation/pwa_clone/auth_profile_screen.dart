@@ -176,7 +176,8 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
       ),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 132),
         children: [
           Container(
             padding: const EdgeInsets.all(18),
@@ -507,6 +508,132 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _goToAuth() {
+    context.push('/auth?redirect=${Uri.encodeComponent('/profile')}');
+  }
+
+  Widget _buildGuestProfile(BuildContext context) {
+    return Container(
+      color: const Color(0xFFF3F4F7),
+      child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 132),
+        children: [
+          _ProfileFlagHeader(
+            fullName: 'Гость',
+            phone: 'Без авторизации',
+            initials: 'KM',
+            photo: null,
+            decodeDataImage: _decodeDataImage,
+          ),
+          const _InfoBanner(
+            ok: false,
+            text: 'Вы не авторизованы. Доступны настройки и документы. Для заказов выполните вход.',
+          ),
+          const SizedBox(height: 14),
+          const _SectionTitle('Аккаунт'),
+          const SizedBox(height: 8),
+          _ProfileGroup(children: [
+            _RowAction(
+              title: 'Войти или зарегистрироваться',
+              subtitle: 'Авторизация по номеру телефона',
+              icon: Icons.login_rounded,
+              iconColor: const Color(0xFF7B2CF5),
+              onTap: _goToAuth,
+            ),
+          ]),
+          const SizedBox(height: 14),
+          const _SectionTitle('Данные пользователя'),
+          const SizedBox(height: 8),
+          _ProfileGroup(children: [
+            _RowAction(
+              title: 'Адрес доставки',
+              subtitle: 'Требуется авторизация',
+              icon: Icons.location_on_outlined,
+              iconColor: const Color(0xFFF43F5E),
+              onTap: _goToAuth,
+            ),
+          ]),
+          const SizedBox(height: 14),
+          const _SectionTitle('Заказы'),
+          const SizedBox(height: 8),
+          _ProfileGroup(children: [
+            _RowAction(
+              title: 'Мои заказы',
+              subtitle: 'Требуется авторизация',
+              icon: Icons.receipt_long_outlined,
+              iconColor: const Color(0xFF9F7AEA),
+              onTap: _goToAuth,
+            ),
+          ]),
+          const SizedBox(height: 14),
+          const _SectionTitle('Настройки'),
+          const SizedBox(height: 8),
+          _ProfileGroup(children: [
+            const _RowAction(
+              title: 'Язык',
+              icon: Icons.language_rounded,
+              iconColor: Color(0xFF38BDF8),
+              trailing: _Pill(label: 'Русский'),
+            ),
+            const _RowAction(
+              title: 'Валюта',
+              icon: Icons.currency_ruble_rounded,
+              iconColor: Color(0xFF818CF8),
+              trailing: _CurrencyPill(),
+            ),
+            _RowAction(
+              title: 'Уведомления',
+              icon: Icons.notifications_none_rounded,
+              iconColor: const Color(0xFFF59E0B),
+              trailing: _SettingSwitch(
+                checked: _notificationsEnabled,
+                onToggle: () {
+                  setState(
+                      () => _notificationsEnabled = !_notificationsEnabled);
+                  _persistNotifications();
+                },
+              ),
+            ),
+          ]),
+          const SizedBox(height: 14),
+          const _SectionTitle('Документы'),
+          const SizedBox(height: 8),
+          _ProfileGroup(children: [
+            _RowAction(
+              title: 'Политика конфиденциальности',
+              subtitle: 'Условия обработки персональных данных',
+              icon: Icons.check_rounded,
+              iconColor: const Color(0xFF4ADE80),
+              onTap: () => context.push('/privacy-policy'),
+            ),
+            _RowAction(
+              title: 'Пользовательское соглашение',
+              subtitle: 'Основные правила использования сервиса',
+              icon: Icons.description_outlined,
+              iconColor: const Color(0xFFC4B5FD),
+              onTap: () => context.push('/user-agreement'),
+            ),
+            _RowAction(
+              title: 'Правила продажи',
+              subtitle: 'Публичная оферта и условия оформления заказа',
+              icon: Icons.request_quote_outlined,
+              iconColor: const Color(0xFFFBBF24),
+              onTap: () => context.push('/sales-rules'),
+            ),
+            _RowAction(
+              title: 'Контакты',
+              subtitle: 'Связь с поддержкой и компанией',
+              icon: Icons.mail_outline_rounded,
+              iconColor: const Color(0xFFF472B6),
+              onTap: _openContacts,
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
   Uint8List? _decodeDataImage(String? value) {
     final raw = (value ?? '').trim();
     if (!raw.startsWith('data:image')) return null;
@@ -537,29 +664,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final user = _app.auth.user;
-    final isLoggedIn = user != null;
-    void onAuth() =>
-        context.push('/auth?redirect=${Uri.encodeComponent('/profile')}');
+    if (user == null) {
+      return _buildGuestProfile(context);
+    }
 
-    final userFullName = (user?.fullName ?? '').trim();
-    final userPhone = (user?.phone ?? '').trim();
-    final fullName = userFullName.isNotEmpty ? userFullName : 'Вход';
-    final phone = userPhone.isNotEmpty ? userPhone : 'Нажмите, чтобы войти';
-    final initials = _initials(fullName);
+    final initials =
+        _initials(user.fullName.isEmpty ? 'KuMarket' : user.fullName);
     final deliverySubtitle =
-        user?.deliveryAddress?.pickupPointLabel ?? 'Добавьте адрес после входа';
-    final previewPhoto = _editing ? _draftPhoto : user?.photo;
+        user.deliveryAddress?.pickupPointLabel ?? 'Не добавлен';
+    final previewPhoto = _editing ? _draftPhoto : user.photo;
 
     return Container(
       color: const Color(0xFFF3F4F7),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 132),
         children: [
           _ProfileFlagHeader(
-            fullName: fullName,
-            phone: phone,
+            fullName: user.fullName,
+            phone: user.phone,
             initials: initials,
-            photo: user?.photo,
+            photo: user.photo,
             decodeDataImage: _decodeDataImage,
           ),
           if (_isSaved) const _InfoBanner(ok: true, text: 'Профиль сохранен'),
@@ -569,17 +694,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 8),
           _ProfileGroup(children: [
             _RowAction(
-              title: isLoggedIn ? 'Изменить' : 'Вход',
-              subtitle: isLoggedIn
-                  ? 'Обновить имя, телефон и данные профиля'
-                  : 'Войдите, чтобы управлять профилем',
-              icon: isLoggedIn ? Icons.edit_outlined : Icons.login_rounded,
-              iconColor:
-                  isLoggedIn ? const Color(0xFFF59E0B) : const Color(0xFF7B2CF5),
-              onTap: isLoggedIn ? _startEdit : onAuth,
+              title: 'Изменить',
+              subtitle: 'Обновить имя, телефон и данные профиля',
+              icon: Icons.edit_outlined,
+              iconColor: const Color(0xFFF59E0B),
+              onTap: _startEdit,
             ),
           ]),
-          if (_editing && isLoggedIn)
+          if (_editing)
             _EditCard(
               nameController: _nameController,
               cityController: _cityController,
@@ -677,85 +799,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: _openContacts,
             ),
             _RowAction(
-              title: isLoggedIn ? 'Выход' : 'Вход',
-              subtitle: isLoggedIn
-                  ? 'Завершить текущую сессию'
-                  : 'Войти или зарегистрироваться',
-              icon: isLoggedIn ? Icons.logout_rounded : Icons.login_rounded,
+              title: 'Выход',
+              subtitle: 'Завершить текущую сессию',
+              icon: Icons.logout_rounded,
               iconColor: const Color(0xFF60A5FA),
-              danger: isLoggedIn,
-              onTap: isLoggedIn ? _logout : onAuth,
+              danger: true,
+              onTap: _logout,
             ),
           ]),
-        ],
-      ),
-    );
-  }
-}
-
-// ignore: unused_element
-class _ProfileUnauth extends StatelessWidget {
-  const _ProfileUnauth({required this.onAuth});
-
-  final VoidCallback onAuth;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFF2F3F7),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: const Color(0xFFE7E9F1)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF2EBFF),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Icon(Icons.lock_outline_rounded,
-                      color: Color(0xFF7B2CF5), size: 32),
-                ),
-                const SizedBox(height: 14),
-                const Text('Профиль',
-                    style: TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF111827))),
-                const SizedBox(height: 8),
-                const Text(
-                  'Для доступа к профилю выполните вход по номеру Кыргызстана.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: Color(0xFF6B7280),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      height: 1.45),
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: onAuth,
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF7B2CF5),
-                        foregroundColor: Colors.white),
-                    child: const Text('Войти или зарегистрироваться'),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );

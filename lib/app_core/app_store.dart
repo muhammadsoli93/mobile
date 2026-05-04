@@ -6,7 +6,14 @@ import 'package:get_storage/get_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:kumarket/app_core/models.dart';
 
-const String _apiBase = 'https://kumarket.shop/api';
+const String _apiBasePrimary = String.fromEnvironment(
+  'KUMARKET_API_BASE',
+  defaultValue: 'https://kumarket.shop/api',
+);
+const String _apiBaseFallback = String.fromEnvironment(
+  'KUMARKET_API_BASE_FALLBACK',
+  defaultValue: 'https://kumarket.net/api',
+);
 const String _authStorageKey = 'kumarket_auth_user_v1';
 const String _authTokenStorageKey = 'kumarket_auth_tokens_v1';
 const String _cartStorageKey = 'kumarket_cart_v1';
@@ -26,6 +33,18 @@ const String _deepSeekModel = String.fromEnvironment(
   'DEEPSEEK_MODEL',
   defaultValue: 'deepseek-reasoner',
 );
+
+List<String> _apiBaseCandidates() {
+  final normalized = <String>[];
+  for (final base in <String>[_apiBasePrimary, _apiBaseFallback]) {
+    final value = base.trim();
+    if (value.isEmpty || normalized.contains(value)) {
+      continue;
+    }
+    normalized.add(value);
+  }
+  return normalized;
+}
 
 class ApiException implements Exception {
   const ApiException({
@@ -699,65 +718,68 @@ class ApiService {
 
     ApiException? lastError;
     http.Response? lastResponse;
+    final apiBases = _apiBaseCandidates();
 
-    for (int i = 0; i < paths.length; i += 1) {
-      final path = _normalizePath(paths[i]);
-      final uri = Uri.parse('$_apiBase$path').replace(queryParameters: query);
-      try {
-        final headers = <String, String>{
-          'Accept': 'application/json',
-        };
-        if ((accessToken ?? '').trim().isNotEmpty) {
-          headers['Authorization'] = 'Bearer ${accessToken!.trim()}';
-        }
-        if (body != null) {
-          headers['Content-Type'] = 'application/json';
-        }
+    for (final apiBase in apiBases) {
+      for (int i = 0; i < paths.length; i += 1) {
+        final path = _normalizePath(paths[i]);
+        final uri = Uri.parse('$apiBase$path').replace(queryParameters: query);
+        try {
+          final headers = <String, String>{
+            'Accept': 'application/json',
+          };
+          if ((accessToken ?? '').trim().isNotEmpty) {
+            headers['Authorization'] = 'Bearer ${accessToken!.trim()}';
+          }
+          if (body != null) {
+            headers['Content-Type'] = 'application/json';
+          }
 
-        late final http.Response response;
-        switch (method.toUpperCase()) {
-          case 'GET':
-            response = await _client.get(uri, headers: headers);
-            break;
-          case 'POST':
-            response = await _client.post(
-              uri,
-              headers: headers,
-              body: body == null ? null : jsonEncode(body),
-            );
-            break;
-          case 'PUT':
-            response = await _client.put(
-              uri,
-              headers: headers,
-              body: body == null ? null : jsonEncode(body),
-            );
-            break;
-          case 'PATCH':
-            response = await _client.patch(
-              uri,
-              headers: headers,
-              body: body == null ? null : jsonEncode(body),
-            );
-            break;
-          case 'DELETE':
-            response = await _client.delete(uri, headers: headers);
-            break;
-          default:
-            throw ApiException(message: 'Unsupported method: $method');
-        }
+          late final http.Response response;
+          switch (method.toUpperCase()) {
+            case 'GET':
+              response = await _client.get(uri, headers: headers);
+              break;
+            case 'POST':
+              response = await _client.post(
+                uri,
+                headers: headers,
+                body: body == null ? null : jsonEncode(body),
+              );
+              break;
+            case 'PUT':
+              response = await _client.put(
+                uri,
+                headers: headers,
+                body: body == null ? null : jsonEncode(body),
+              );
+              break;
+            case 'PATCH':
+              response = await _client.patch(
+                uri,
+                headers: headers,
+                body: body == null ? null : jsonEncode(body),
+              );
+              break;
+            case 'DELETE':
+              response = await _client.delete(uri, headers: headers);
+              break;
+            default:
+              throw ApiException(message: 'Unsupported method: $method');
+          }
 
-        lastResponse = response;
-        if (response.statusCode == 404 && i < paths.length - 1) {
-          continue;
-        }
+          lastResponse = response;
+          if (response.statusCode == 404 && i < paths.length - 1) {
+            continue;
+          }
 
-        return response;
-      } catch (e) {
-        if (e is ApiException) {
-          lastError = e;
-        } else {
-          lastError = ApiException(message: e.toString());
+          return response;
+        } catch (e) {
+          if (e is ApiException) {
+            lastError = e;
+          } else {
+            lastError = ApiException(message: e.toString());
+          }
         }
       }
     }
@@ -872,25 +894,43 @@ class AuthStore extends ChangeNotifier {
 
   void _restore() {
     final rawUser = _storage.read(_authStorageKey);
-    if (rawUser is Map<String, dynamic>) {
-      _user = AuthUser.fromJson(rawUser);
-    } else if (rawUser is String && rawUser.isNotEmpty) {
-      final decoded = jsonDecode(rawUser);
-      if (decoded is Map<String, dynamic>) {
-        _user = AuthUser.fromJson(decoded);
+    try {
+      if (rawUser is Map) {
+        _user = AuthUser.fromJson(Map<String, dynamic>.from(rawUser));
+      } else if (rawUser is String && rawUser.trim().isNotEmpty) {
+        final decoded = jsonDecode(rawUser);
+        if (decoded is Map) {
+          _user = AuthUser.fromJson(Map<String, dynamic>.from(decoded));
+        }
       }
+    } catch (_) {
+      _user = null;
+      _storage.remove(_authStorageKey);
     }
 
     final rawTokens = _storage.read(_authTokenStorageKey);
-    if (rawTokens is Map<String, dynamic>) {
-      _accessToken = toSafeString(rawTokens['access']);
-      _refreshToken = toSafeString(rawTokens['refresh']);
-    } else if (rawTokens is String && rawTokens.isNotEmpty) {
-      final decoded = jsonDecode(rawTokens);
-      if (decoded is Map<String, dynamic>) {
-        _accessToken = toSafeString(decoded['access']);
-        _refreshToken = toSafeString(decoded['refresh']);
+    try {
+      if (rawTokens is Map) {
+        final tokens = Map<String, dynamic>.from(rawTokens);
+        _accessToken = toSafeString(tokens['access']);
+        _refreshToken = toSafeString(tokens['refresh']);
+      } else if (rawTokens is String && rawTokens.trim().isNotEmpty) {
+        final decoded = jsonDecode(rawTokens);
+        if (decoded is Map) {
+          final tokens = Map<String, dynamic>.from(decoded);
+          _accessToken = toSafeString(tokens['access']);
+          _refreshToken = toSafeString(tokens['refresh']);
+        }
       }
+    } catch (_) {
+      _accessToken = null;
+      _refreshToken = null;
+      _storage.remove(_authTokenStorageKey);
+    }
+
+    if ((_accessToken ?? '').trim().isEmpty) {
+      _accessToken = null;
+      _refreshToken = null;
     }
   }
 

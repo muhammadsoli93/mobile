@@ -7,8 +7,20 @@ import 'package:kumarket/presentation/pwa_clone/orders_delivery_screen.dart';
 import 'package:kumarket/presentation/pwa_clone/product_screen.dart';
 import 'package:kumarket/presentation/pwa_clone/pwa_shell.dart';
 
+const String _configuredInitialLocation = String.fromEnvironment(
+  'INITIAL_LOCATION',
+  defaultValue: '/',
+);
+
+String _resolveInitialLocation() {
+  if (_configuredInitialLocation.startsWith('/')) {
+    return _configuredInitialLocation;
+  }
+  return '/';
+}
+
 final router = GoRouter(
-  initialLocation: '/',
+  initialLocation: _resolveInitialLocation(),
   routes: [
     ShellRoute(
       builder: (context, state, child) {

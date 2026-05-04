@@ -15,7 +15,8 @@ class LegalDocumentScreen extends StatelessWidget {
     return Container(
       color: const Color(0xFFF2F2F7),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 132),
         children: [
           Text(
             title,

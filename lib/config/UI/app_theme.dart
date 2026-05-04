@@ -4,6 +4,8 @@ import 'package:kumarket/config/UI/app_text_styles.dart';
 
 final appTheme = ThemeData(
   useMaterial3: true,
+  fontFamily: 'Gilroy',
+  splashFactory: InkRipple.splashFactory,
   scaffoldBackgroundColor: const Color(0xFFF2F2F7),
   colorScheme: const ColorScheme.light(
     primary: Color(0xFF7B2CF5),

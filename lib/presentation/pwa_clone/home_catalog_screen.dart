@@ -878,7 +878,8 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
         onRefresh: () => _loadInitial(preserveExisting: true),
         child: ListView(
           controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 132),
           children: [
             _SearchHeader(
               controller: _searchController,
@@ -1315,7 +1316,7 @@ class _CategoriesStrip extends StatelessWidget {
       return SizedBox(
         height: 128,
         child: ListView.separated(
-          physics: const BouncingScrollPhysics(),
+          physics: const ClampingScrollPhysics(),
           scrollDirection: Axis.horizontal,
           itemBuilder: (context, index) {
             return Container(
@@ -1336,7 +1337,7 @@ class _CategoriesStrip extends StatelessWidget {
     return SizedBox(
       height: 128,
       child: ListView.builder(
-        physics: const BouncingScrollPhysics(),
+        physics: const ClampingScrollPhysics(),
         scrollDirection: Axis.horizontal,
         itemCount: categories.length + 1,
         itemBuilder: (context, index) {

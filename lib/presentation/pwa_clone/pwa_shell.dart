@@ -188,69 +188,46 @@ class _PwaShellScaffoldState extends State<PwaShellScaffold> {
 
     return Scaffold(
       extendBody: true,
-      body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onHorizontalDragStart: (_) {
-          if (!_isTabRootLocation(widget.location)) {
-            return;
-          }
-          if (_dragDx != 0) {
+      body: SafeArea(
+        top: true,
+        bottom: false,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onHorizontalDragStart: (_) {
+            if (!_isTabRootLocation(widget.location)) {
+              return;
+            }
+            if (_dragDx != 0) {
+              setState(() {
+                _dragDx = 0;
+              });
+            }
+          },
+          onHorizontalDragUpdate: (details) {
+            if (!_isTabRootLocation(widget.location)) {
+              return;
+            }
+            setState(() {
+              _dragDx = (_dragDx + details.delta.dx).clamp(-64.0, 64.0);
+            });
+          },
+          onHorizontalDragCancel: () {
+            if (_dragDx == 0) {
+              return;
+            }
             setState(() {
               _dragDx = 0;
             });
-          }
-        },
-        onHorizontalDragUpdate: (details) {
-          if (!_isTabRootLocation(widget.location)) {
-            return;
-          }
-          setState(() {
-            _dragDx = (_dragDx + details.delta.dx).clamp(-64.0, 64.0);
-          });
-        },
-        onHorizontalDragCancel: () {
-          if (_dragDx == 0) {
-            return;
-          }
-          setState(() {
-            _dragDx = 0;
-          });
-        },
-        onHorizontalDragEnd: (details) {
-          _onHorizontalDragEnd(context, details, selectedIndex);
-        },
-        child: Transform.translate(
-          offset: Offset(dragOffset, 0),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 260),
-            reverseDuration: const Duration(milliseconds: 220),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeOutCubic,
-            transitionBuilder: (child, animation) {
-              double beginDx = 0;
-              if (_transitionDirection > 0) {
-                beginDx = 0.10;
-              } else if (_transitionDirection < 0) {
-                beginDx = -0.10;
-              }
-
-              final offsetAnimation = Tween<Offset>(
-                begin: Offset(beginDx, 0),
-                end: Offset.zero,
-              ).animate(animation);
-
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: offsetAnimation,
-                  child: child,
-                ),
-              );
-            },
-            child: KeyedSubtree(
-              key: ValueKey<String>(widget.location),
-              child: widget.child,
-            ),
+          },
+          onHorizontalDragEnd: (details) {
+            _onHorizontalDragEnd(context, details, selectedIndex);
+          },
+          child: Transform.translate(
+            offset: Offset(dragOffset, 0),
+            // GoRouter manages navigator/page keys internally. Wrapping routed
+            // content in AnimatedSwitcher+KeyedSubtree can duplicate those keys
+            // on rebuild and trigger "Duplicate GlobalKey" in the simulator.
+            child: widget.child,
           ),
         ),
       ),

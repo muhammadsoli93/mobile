@@ -1404,7 +1404,7 @@ String normalizeImageUrl(String value) {
     return 'https:$value';
   }
   if (value.startsWith('/')) {
-    return 'https://kumarket.shop$value';
+    return 'https://kumarket.net$value';
   }
   return value;
 }

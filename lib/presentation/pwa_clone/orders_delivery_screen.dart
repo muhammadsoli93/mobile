@@ -112,7 +112,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
     return Container(
       color: const Color(0xFFF2F2F7),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 132),
         children: [
           const Text(
             'Мои заказы',
@@ -943,6 +944,7 @@ class _DeliveryAddressScreenState extends State<DeliveryAddressScreen> {
       child: Stack(
         children: [
           ListView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 190),
             children: [
               Align(

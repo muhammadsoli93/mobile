@@ -516,7 +516,8 @@ class _CartScreenState extends State<CartScreen> {
       color: const Color(0xFFF2F2F7),
       child: ListView(
         controller: _scrollController,
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 132),
         children: [
           Row(
             children: [
