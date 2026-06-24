@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -24,7 +24,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   bool _verifyStep = false;
   bool _profileStep = false;
-  String _info = 'Введите номер телефона и получите код по SMS.';
+  String _info = 'Р’РІРµРґРёС‚Рµ РЅРѕРјРµСЂ С‚РµР»РµС„РѕРЅР° Рё РїРѕР»СѓС‡РёС‚Рµ РєРѕРґ РїРѕ WhatsApp.';
   String _error = '';
   bool _busy = false;
 
@@ -40,7 +40,7 @@ class _AuthScreenState extends State<AuthScreen> {
     final normalized = value.trim().toLowerCase();
     return normalized.isEmpty ||
         normalized == 'user' ||
-        normalized == 'пользователь';
+        normalized == 'РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ';
   }
 
   void _requestCode() {
@@ -107,7 +107,7 @@ class _AuthScreenState extends State<AuthScreen> {
         _verifyStep = false;
         _profileStep = true;
         _error = '';
-        _info = 'Введите имя, чтобы завершить регистрацию.';
+        _info = 'Р’РІРµРґРёС‚Рµ РёРјСЏ, С‡С‚РѕР±С‹ Р·Р°РІРµСЂС€РёС‚СЊ СЂРµРіРёСЃС‚СЂР°С†РёСЋ.';
       });
       return;
     }
@@ -126,7 +126,7 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _saveNameAsync() async {
     final fullName = _nameController.text.trim();
     if (fullName.isEmpty) {
-      setState(() => _error = 'Введите имя.');
+      setState(() => _error = 'Р’РІРµРґРёС‚Рµ РёРјСЏ.');
       return;
     }
 
@@ -162,10 +162,10 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     final title = _profileStep
-        ? 'Шаг 3: Ваше имя'
+        ? 'РЁР°Рі 3: Р’Р°С€Рµ РёРјСЏ'
         : (_verifyStep
-            ? 'Шаг 2: Подтверждение входа'
-            : 'Шаг 1: Номер телефона');
+            ? 'РЁР°Рі 2: РџРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ РІС…РѕРґР°'
+            : 'РЁР°Рі 1: РќРѕРјРµСЂ С‚РµР»РµС„РѕРЅР°');
 
     return Container(
       decoration: const BoxDecoration(
@@ -211,7 +211,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  'Вход в KuMarket',
+                  'Р’С…РѕРґ РІ KuMarket',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 34,
@@ -256,14 +256,14 @@ class _AuthScreenState extends State<AuthScreen> {
                   keyboardType: TextInputType.phone,
                   enabled: !_profileStep,
                   decoration:
-                      const InputDecoration(labelText: 'Номер телефона'),
+                      const InputDecoration(labelText: 'РќРѕРјРµСЂ С‚РµР»РµС„РѕРЅР°'),
                 ),
                 if (_verifyStep) ...[
                   const SizedBox(height: 8),
                   TextField(
                     controller: _codeController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Код из SMS'),
+                    decoration: const InputDecoration(labelText: 'РљРѕРґ РёР· WhatsApp'),
                   ),
                   const SizedBox(height: 8),
                   TextButton(
@@ -276,7 +276,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               _codeController.clear();
                             });
                           },
-                    child: const Text('Изменить номер'),
+                    child: const Text('РР·РјРµРЅРёС‚СЊ РЅРѕРјРµСЂ'),
                   ),
                 ],
                 if (_profileStep) ...[
@@ -284,7 +284,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   TextField(
                     controller: _nameController,
                     textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(labelText: 'Ваше имя'),
+                    decoration: const InputDecoration(labelText: 'Р’Р°С€Рµ РёРјСЏ'),
                   ),
                 ],
                 if (_error.isNotEmpty) ...[
@@ -314,10 +314,10 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                     child: Text(
                       _busy
-                          ? 'Загрузка...'
+                          ? 'Р—Р°РіСЂСѓР·РєР°...'
                           : (_profileStep
-                              ? 'Сохранить и продолжить'
-                              : (_verifyStep ? 'Войти' : 'Получить код')),
+                              ? 'РЎРѕС…СЂР°РЅРёС‚СЊ Рё РїСЂРѕРґРѕР»Р¶РёС‚СЊ'
+                              : (_verifyStep ? 'Р’РѕР№С‚Рё' : 'РџРѕР»СѓС‡РёС‚СЊ РєРѕРґ')),
                       style: const TextStyle(
                           fontSize: 17, fontWeight: FontWeight.w800),
                     ),
@@ -429,7 +429,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (file == null) return;
     final bytes = await file.readAsBytes();
     if (bytes.length > _maxPhotoSizeBytes) {
-      setState(() => _formError = 'Размер фото не должен превышать 2 МБ.');
+      setState(() => _formError = 'Р Р°Р·РјРµСЂ С„РѕС‚Рѕ РЅРµ РґРѕР»Р¶РµРЅ РїСЂРµРІС‹С€Р°С‚СЊ 2 РњР‘.');
       return;
     }
 
@@ -503,7 +503,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await Clipboard.setData(const ClipboardData(text: 'Nookaat@yandex.ru'));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Email скопирован: Nookaat@yandex.ru')),
+      const SnackBar(content: Text('Email СЃРєРѕРїРёСЂРѕРІР°РЅ: Nookaat@yandex.ru')),
     );
   }
 
@@ -543,11 +543,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final userFullName = (user?.fullName ?? '').trim();
     final userPhone = (user?.phone ?? '').trim();
-    final fullName = userFullName.isNotEmpty ? userFullName : 'Вход';
-    final phone = userPhone.isNotEmpty ? userPhone : 'Нажмите, чтобы войти';
+    final fullName = userFullName.isNotEmpty ? userFullName : 'Р’С…РѕРґ';
+    final phone = userPhone.isNotEmpty ? userPhone : 'РќР°Р¶РјРёС‚Рµ, С‡С‚РѕР±С‹ РІРѕР№С‚Рё';
     final initials = _initials(fullName);
     final deliverySubtitle =
-        user?.deliveryAddress?.pickupPointLabel ?? 'Добавьте адрес после входа';
+        user?.deliveryAddress?.pickupPointLabel ?? 'Р”РѕР±Р°РІСЊС‚Рµ Р°РґСЂРµСЃ РїРѕСЃР»Рµ РІС…РѕРґР°';
     final previewPhoto = _editing ? _draftPhoto : user?.photo;
 
     return Container(
@@ -562,17 +562,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
             photo: user?.photo,
             decodeDataImage: _decodeDataImage,
           ),
-          if (_isSaved) const _InfoBanner(ok: true, text: 'Профиль сохранен'),
+          if (_isSaved) const _InfoBanner(ok: true, text: 'РџСЂРѕС„РёР»СЊ СЃРѕС…СЂР°РЅРµРЅ'),
           if (_formError.isNotEmpty) _InfoBanner(ok: false, text: _formError),
           const SizedBox(height: 14),
-          const _SectionTitle('Аккаунт'),
+          const _SectionTitle('РђРєРєР°СѓРЅС‚'),
           const SizedBox(height: 8),
           _ProfileGroup(children: [
             _RowAction(
-              title: isLoggedIn ? 'Изменить' : 'Вход',
+              title: isLoggedIn ? 'РР·РјРµРЅРёС‚СЊ' : 'Р’С…РѕРґ',
               subtitle: isLoggedIn
-                  ? 'Обновить имя, телефон и данные профиля'
-                  : 'Войдите, чтобы управлять профилем',
+                  ? 'РћР±РЅРѕРІРёС‚СЊ РёРјСЏ, С‚РµР»РµС„РѕРЅ Рё РґР°РЅРЅС‹Рµ РїСЂРѕС„РёР»СЏ'
+                  : 'Р’РѕР№РґРёС‚Рµ, С‡С‚РѕР±С‹ СѓРїСЂР°РІР»СЏС‚СЊ РїСЂРѕС„РёР»РµРј',
               icon: isLoggedIn ? Icons.edit_outlined : Icons.login_rounded,
               iconColor:
                   isLoggedIn ? const Color(0xFFF59E0B) : const Color(0xFF7B2CF5),
@@ -591,11 +591,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               decodeDataImage: _decodeDataImage,
             ),
           const SizedBox(height: 14),
-          const _SectionTitle('Данные пользователя'),
+          const _SectionTitle('Р”Р°РЅРЅС‹Рµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ'),
           const SizedBox(height: 8),
           _ProfileGroup(children: [
             _RowAction(
-              title: 'Адрес доставки',
+              title: 'РђРґСЂРµСЃ РґРѕСЃС‚Р°РІРєРё',
               subtitle: deliverySubtitle,
               icon: Icons.location_on_outlined,
               iconColor: const Color(0xFFF43F5E),
@@ -603,35 +603,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ]),
           const SizedBox(height: 14),
-          const _SectionTitle('Заказы'),
+          const _SectionTitle('Р—Р°РєР°Р·С‹'),
           const SizedBox(height: 8),
           _ProfileGroup(children: [
             _RowAction(
-              title: 'Мои заказы',
-              subtitle: 'Список заказов и детали по каждому заказу',
+              title: 'РњРѕРё Р·Р°РєР°Р·С‹',
+              subtitle: 'РЎРїРёСЃРѕРє Р·Р°РєР°Р·РѕРІ Рё РґРµС‚Р°Р»Рё РїРѕ РєР°Р¶РґРѕРјСѓ Р·Р°РєР°Р·Сѓ',
               icon: Icons.receipt_long_outlined,
               iconColor: const Color(0xFF9F7AEA),
               onTap: () => context.push('/orders'),
             ),
           ]),
           const SizedBox(height: 14),
-          const _SectionTitle('Настройки'),
+          const _SectionTitle('РќР°СЃС‚СЂРѕР№РєРё'),
           const SizedBox(height: 8),
           _ProfileGroup(children: [
             const _RowAction(
-              title: 'Язык',
+              title: 'РЇР·С‹Рє',
               icon: Icons.language_rounded,
               iconColor: Color(0xFF38BDF8),
-              trailing: _Pill(label: 'Русский'),
+              trailing: _Pill(label: 'Р СѓСЃСЃРєРёР№'),
             ),
             const _RowAction(
-              title: 'Валюта',
+              title: 'Р’Р°Р»СЋС‚Р°',
               icon: Icons.currency_ruble_rounded,
               iconColor: Color(0xFF818CF8),
               trailing: _CurrencyPill(),
             ),
             _RowAction(
-              title: 'Уведомления',
+              title: 'РЈРІРµРґРѕРјР»РµРЅРёСЏ',
               icon: Icons.notifications_none_rounded,
               iconColor: const Color(0xFFF59E0B),
               trailing: _SettingSwitch(
@@ -645,42 +645,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ]),
           const SizedBox(height: 14),
-          const _SectionTitle('Документы'),
+          const _SectionTitle('Р”РѕРєСѓРјРµРЅС‚С‹'),
           const SizedBox(height: 8),
           _ProfileGroup(children: [
             _RowAction(
-              title: 'Политика конфиденциальности',
-              subtitle: 'Условия обработки персональных данных',
+              title: 'РџРѕР»РёС‚РёРєР° РєРѕРЅС„РёРґРµРЅС†РёР°Р»СЊРЅРѕСЃС‚Рё',
+              subtitle: 'РЈСЃР»РѕРІРёСЏ РѕР±СЂР°Р±РѕС‚РєРё РїРµСЂСЃРѕРЅР°Р»СЊРЅС‹С… РґР°РЅРЅС‹С…',
               icon: Icons.check_rounded,
               iconColor: const Color(0xFF4ADE80),
               onTap: () => context.push('/privacy-policy'),
             ),
             _RowAction(
-              title: 'Пользовательское соглашение',
-              subtitle: 'Основные правила использования сервиса',
+              title: 'РџРѕР»СЊР·РѕРІР°С‚РµР»СЊСЃРєРѕРµ СЃРѕРіР»Р°С€РµРЅРёРµ',
+              subtitle: 'РћСЃРЅРѕРІРЅС‹Рµ РїСЂР°РІРёР»Р° РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ СЃРµСЂРІРёСЃР°',
               icon: Icons.description_outlined,
               iconColor: const Color(0xFFC4B5FD),
               onTap: () => context.push('/user-agreement'),
             ),
             _RowAction(
-              title: 'Правила продажи',
-              subtitle: 'Публичная оферта и условия оформления заказа',
+              title: 'РџСЂР°РІРёР»Р° РїСЂРѕРґР°Р¶Рё',
+              subtitle: 'РџСѓР±Р»РёС‡РЅР°СЏ РѕС„РµСЂС‚Р° Рё СѓСЃР»РѕРІРёСЏ РѕС„РѕСЂРјР»РµРЅРёСЏ Р·Р°РєР°Р·Р°',
               icon: Icons.request_quote_outlined,
               iconColor: const Color(0xFFFBBF24),
               onTap: () => context.push('/sales-rules'),
             ),
             _RowAction(
-              title: 'Контакты',
-              subtitle: 'Связь с поддержкой и компанией',
+              title: 'РљРѕРЅС‚Р°РєС‚С‹',
+              subtitle: 'РЎРІСЏР·СЊ СЃ РїРѕРґРґРµСЂР¶РєРѕР№ Рё РєРѕРјРїР°РЅРёРµР№',
               icon: Icons.mail_outline_rounded,
               iconColor: const Color(0xFFF472B6),
               onTap: _openContacts,
             ),
             _RowAction(
-              title: isLoggedIn ? 'Выход' : 'Вход',
+              title: isLoggedIn ? 'Р’С‹С…РѕРґ' : 'Р’С…РѕРґ',
               subtitle: isLoggedIn
-                  ? 'Завершить текущую сессию'
-                  : 'Войти или зарегистрироваться',
+                  ? 'Р—Р°РІРµСЂС€РёС‚СЊ С‚РµРєСѓС‰СѓСЋ СЃРµСЃСЃРёСЋ'
+                  : 'Р’РѕР№С‚Рё РёР»Рё Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°С‚СЊСЃСЏ',
               icon: isLoggedIn ? Icons.logout_rounded : Icons.login_rounded,
               iconColor: const Color(0xFF60A5FA),
               danger: isLoggedIn,
@@ -726,14 +726,14 @@ class _ProfileUnauth extends StatelessWidget {
                       color: Color(0xFF7B2CF5), size: 32),
                 ),
                 const SizedBox(height: 14),
-                const Text('Профиль',
+                const Text('РџСЂРѕС„РёР»СЊ',
                     style: TextStyle(
                         fontSize: 30,
                         fontWeight: FontWeight.w800,
                         color: Color(0xFF111827))),
                 const SizedBox(height: 8),
                 const Text(
-                  'Для доступа к профилю выполните вход по номеру Кыргызстана.',
+                  'Р”Р»СЏ РґРѕСЃС‚СѓРїР° Рє РїСЂРѕС„РёР»СЋ РІС‹РїРѕР»РЅРёС‚Рµ РІС…РѕРґ РїРѕ РЅРѕРјРµСЂСѓ РљС‹СЂРіС‹Р·СЃС‚Р°РЅР°.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       color: Color(0xFF6B7280),
@@ -750,7 +750,7 @@ class _ProfileUnauth extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF7B2CF5),
                         foregroundColor: Colors.white),
-                    child: const Text('Войти или зарегистрироваться'),
+                    child: const Text('Р’РѕР№С‚Рё РёР»Рё Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°С‚СЊСЃСЏ'),
                   ),
                 ),
               ],
@@ -1142,15 +1142,15 @@ class _EditCard extends StatelessWidget {
       child: Column(
         children: [
           _ProfileField(
-              label: 'ФИО', controller: nameController, hint: 'Введите ФИО'),
+              label: 'Р¤РРћ', controller: nameController, hint: 'Р’РІРµРґРёС‚Рµ Р¤РРћ'),
           const SizedBox(height: 10),
           _ProfileField(
-              label: 'Город', controller: cityController, hint: 'Ваш город'),
+              label: 'Р“РѕСЂРѕРґ', controller: cityController, hint: 'Р’Р°С€ РіРѕСЂРѕРґ'),
           const SizedBox(height: 10),
           const Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              'Фото профиля',
+              'Р¤РѕС‚Рѕ РїСЂРѕС„РёР»СЏ',
               style: TextStyle(
                   color: Color(0xFF99A2B3),
                   fontSize: 12,
@@ -1163,7 +1163,7 @@ class _EditCard extends StatelessWidget {
             width: double.infinity,
             height: 46,
             child: OutlinedButton(
-                onPressed: onPickPhoto, child: const Text('Выбрать фото')),
+                onPressed: onPickPhoto, child: const Text('Р’С‹Р±СЂР°С‚СЊ С„РѕС‚Рѕ')),
           ),
           if ((previewPhoto ?? '').isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -1185,7 +1185,7 @@ class _EditCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   const Expanded(
-                    child: Text('Фото профиля обновлено',
+                    child: Text('Р¤РѕС‚Рѕ РїСЂРѕС„РёР»СЏ РѕР±РЅРѕРІР»РµРЅРѕ',
                         style: TextStyle(
                             color: Color(0xFF4B5563),
                             fontSize: 14,
@@ -1200,11 +1200,11 @@ class _EditCard extends StatelessWidget {
             children: [
               Expanded(
                   child: ElevatedButton(
-                      onPressed: onSave, child: const Text('Сохранить'))),
+                      onPressed: onSave, child: const Text('РЎРѕС…СЂР°РЅРёС‚СЊ'))),
               const SizedBox(width: 10),
               Expanded(
                   child: OutlinedButton(
-                      onPressed: onCancel, child: const Text('Отмена'))),
+                      onPressed: onCancel, child: const Text('РћС‚РјРµРЅР°'))),
             ],
           ),
         ],
@@ -1278,7 +1278,7 @@ class _CurrencyPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('сом',
+          const Text('СЃРѕРј',
               style: TextStyle(
                   color: Color(0xFF9AA3B5),
                   fontSize: 14,

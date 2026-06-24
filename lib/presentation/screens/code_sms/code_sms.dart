@@ -16,7 +16,7 @@ class CodeSmsScreen extends StatefulWidget {
 class _CodeSmsScreenState extends State<CodeSmsScreen> {
   final _codeController = TextEditingController();
   final _codeFormatter = MaskTextInputFormatter(
-    mask: '#####',
+    mask: '######',
     filter: {'#': RegExp(r'[0-9]')},
     type: MaskAutoCompletionType.lazy,
   );
@@ -49,7 +49,7 @@ class _CodeSmsScreenState extends State<CodeSmsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Введите код из SMS',
+                'Введите код из WhatsApp',
                 style: AppTextStyles.h1,
               ),
               const SizedBox(height: 8),
@@ -62,9 +62,9 @@ class _CodeSmsScreenState extends State<CodeSmsScreen> {
                 controller: _codeController,
                 keyboardType: TextInputType.number,
                 inputFormatters: [_codeFormatter],
-                decoration: const InputDecoration(hintText: '12345'),
+                decoration: const InputDecoration(hintText: '123456'),
                 onChanged: (value) {
-                  if (_codeFormatter.getUnmaskedText().length == 5) {
+                  if (_codeFormatter.getUnmaskedText().length == 6) {
                     context.goNamed(Routers.pathProfileCreateScreen);
                   }
                 },

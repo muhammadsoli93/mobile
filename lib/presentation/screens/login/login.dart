@@ -43,7 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Мы отправим код подтверждения в SMS',
+                'Мы отправим код подтверждения в WhatsApp',
                 style: AppTextStyles.s14w400hB2B2B2,
               ),
               const SizedBox(height: 18),
@@ -60,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const _AgreementLinks(),
               const SizedBox(height: 10),
               AppButton.main(
-                title: 'Получить SMS',
+                title: 'Получить WhatsApp',
                 onTap: _isValidPhone
                     ? () => context.pushNamed(Routers.pathCodeSmsScreen)
                     : null,
