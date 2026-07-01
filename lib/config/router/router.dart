@@ -1,4 +1,5 @@
 ﻿import 'package:go_router/go_router.dart';
+import 'package:flutter/material.dart';
 import 'package:kumarket/presentation/pwa_clone/auth_profile_screen.dart';
 import 'package:kumarket/presentation/pwa_clone/cart_checkout_screen.dart';
 import 'package:kumarket/presentation/pwa_clone/home_catalog_screen.dart';
@@ -19,6 +20,37 @@ String _resolveInitialLocation() {
   return '/';
 }
 
+CustomTransitionPage<void> _pwaPage({
+  required GoRouterState state,
+  required Widget child,
+}) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    transitionDuration: const Duration(milliseconds: 220),
+    reverseTransitionDuration: const Duration(milliseconds: 180),
+    child: child,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curvedAnimation = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      final slideAnimation = Tween<Offset>(
+        begin: const Offset(0, 0.025),
+        end: Offset.zero,
+      ).animate(curvedAnimation);
+
+      return FadeTransition(
+        opacity: curvedAnimation,
+        child: SlideTransition(
+          position: slideAnimation,
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
 final router = GoRouter(
   initialLocation: _resolveInitialLocation(),
   routes: [
@@ -32,79 +64,115 @@ final router = GoRouter(
       routes: [
         GoRoute(
           path: '/',
-          builder: (context, state) => const HomeScreen(),
+          pageBuilder: (context, state) => _pwaPage(
+            state: state,
+            child: const HomeScreen(),
+          ),
         ),
         GoRoute(
           path: '/catalog',
-          builder: (context, state) {
-            return CatalogScreen(
-              initialCategoryId: state.uri.queryParameters['category'],
+          pageBuilder: (context, state) {
+            return _pwaPage(
+              state: state,
+              child: CatalogScreen(
+                initialCategoryId: state.uri.queryParameters['category'],
+              ),
             );
           },
         ),
         GoRoute(
           path: '/product/:id',
-          builder: (context, state) {
-            return ProductScreen(
-              routeId: state.pathParameters['id'] ?? '',
+          pageBuilder: (context, state) {
+            return _pwaPage(
+              state: state,
+              child: ProductScreen(
+                routeId: state.pathParameters['id'] ?? '',
+              ),
             );
           },
         ),
         GoRoute(
           path: '/cart',
-          builder: (context, state) => const CartScreen(),
+          pageBuilder: (context, state) => _pwaPage(
+            state: state,
+            child: const CartScreen(),
+          ),
         ),
         GoRoute(
           path: '/checkout',
-          builder: (context, state) => const CheckoutScreen(),
+          pageBuilder: (context, state) => _pwaPage(
+            state: state,
+            child: const CheckoutScreen(),
+          ),
         ),
         GoRoute(
           path: '/auth',
-          builder: (context, state) {
-            return AuthScreen(
-              redirectPath: state.uri.queryParameters['redirect'],
+          pageBuilder: (context, state) {
+            return _pwaPage(
+              state: state,
+              child: AuthScreen(
+                redirectPath: state.uri.queryParameters['redirect'],
+              ),
             );
           },
         ),
         GoRoute(
           path: '/profile',
-          builder: (context, state) => const ProfileScreen(),
+          pageBuilder: (context, state) => _pwaPage(
+            state: state,
+            child: const ProfileScreen(),
+          ),
         ),
         GoRoute(
           path: '/orders',
-          builder: (context, state) {
-            return OrdersScreen(
-              created: state.uri.queryParameters['created'] == '1',
+          pageBuilder: (context, state) {
+            return _pwaPage(
+              state: state,
+              child: OrdersScreen(
+                created: state.uri.queryParameters['created'] == '1',
+              ),
             );
           },
         ),
         GoRoute(
           path: '/delivery-address',
-          builder: (context, state) {
-            return DeliveryAddressScreen(
-              regionSlug: state.uri.queryParameters['region'],
+          pageBuilder: (context, state) {
+            return _pwaPage(
+              state: state,
+              child: DeliveryAddressScreen(
+                regionSlug: state.uri.queryParameters['region'],
+              ),
             );
           },
         ),
         GoRoute(
           path: '/privacy-policy',
-          builder: (context, state) => const LegalDocumentScreen(
-            title: 'Политика конфиденциальности',
-            body: privacyPolicyText,
+          pageBuilder: (context, state) => _pwaPage(
+            state: state,
+            child: const LegalDocumentScreen(
+              title: 'Политика конфиденциальности',
+              body: privacyPolicyText,
+            ),
           ),
         ),
         GoRoute(
           path: '/user-agreement',
-          builder: (context, state) => const LegalDocumentScreen(
-            title: 'Пользовательское соглашение',
-            body: userAgreementText,
+          pageBuilder: (context, state) => _pwaPage(
+            state: state,
+            child: const LegalDocumentScreen(
+              title: 'Пользовательское соглашение',
+              body: userAgreementText,
+            ),
           ),
         ),
         GoRoute(
           path: '/sales-rules',
-          builder: (context, state) => const LegalDocumentScreen(
-            title: 'Правила продажи',
-            body: salesRulesText,
+          pageBuilder: (context, state) => _pwaPage(
+            state: state,
+            child: const LegalDocumentScreen(
+              title: 'Правила продажи',
+              body: salesRulesText,
+            ),
           ),
         ),
       ],
