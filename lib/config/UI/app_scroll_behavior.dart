@@ -1,4 +1,5 @@
 import 'package:flutter/gestures.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class AppScrollBehavior extends MaterialScrollBehavior {
@@ -6,8 +7,14 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) {
-    // Keep scroll physics identical on iOS and Android for visual parity.
-    return const ClampingScrollPhysics();
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      );
+    }
+    return const ClampingScrollPhysics(
+      parent: AlwaysScrollableScrollPhysics(),
+    );
   }
 
   @override

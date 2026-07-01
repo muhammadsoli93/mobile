@@ -33,9 +33,7 @@ class PwaShellScaffold extends StatefulWidget {
 }
 
 class _PwaShellScaffoldState extends State<PwaShellScaffold> {
-  double _dragDx = 0;
   int _reselectToken = 0;
-  int _transitionDirection = 0;
 
   static const List<String> _tabPaths = <String>[
     '/',
@@ -57,10 +55,6 @@ class _PwaShellScaffoldState extends State<PwaShellScaffold> {
     return 3;
   }
 
-  bool _isTabRootLocation(String path) {
-    return _tabPaths.contains(path);
-  }
-
   String _pathFromIndex(int index) {
     final safeIndex = index.clamp(0, _tabPaths.length - 1);
     return _tabPaths[safeIndex];
@@ -80,76 +74,6 @@ class _PwaShellScaffoldState extends State<PwaShellScaffold> {
     }
     HapticFeedback.selectionClick();
     context.go(_pathFromIndex(index));
-  }
-
-  void _onHorizontalDragEnd(
-    BuildContext context,
-    DragEndDetails details,
-    int selectedIndex,
-  ) {
-    if (!_isTabRootLocation(widget.location)) {
-      if (_dragDx != 0) {
-        setState(() {
-          _dragDx = 0;
-        });
-      }
-      return;
-    }
-
-    final velocity = details.primaryVelocity ?? 0;
-    final distance = _dragDx;
-
-    if (_dragDx != 0) {
-      setState(() {
-        _dragDx = 0;
-      });
-    }
-
-    int? direction;
-    if (velocity.abs() >= 150) {
-      direction = velocity < 0 ? 1 : -1;
-    } else if (distance.abs() >= 52) {
-      direction = distance < 0 ? 1 : -1;
-    }
-
-    if (direction == null) {
-      return;
-    }
-
-    final nextIndex =
-        (selectedIndex + direction).clamp(0, _tabPaths.length - 1);
-    if (nextIndex == selectedIndex) {
-      return;
-    }
-
-    _onTap(context, nextIndex, selectedIndex);
-  }
-
-  @override
-  void didUpdateWidget(covariant PwaShellScaffold oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.location == widget.location) {
-      return;
-    }
-
-    final previousIndex = _indexFromLocation(oldWidget.location);
-    final nextIndex = _indexFromLocation(widget.location);
-
-    if (_isTabRootLocation(oldWidget.location) &&
-        _isTabRootLocation(widget.location)) {
-      final diff = nextIndex - previousIndex;
-      if (diff > 0) {
-        _transitionDirection = 1;
-      } else if (diff < 0) {
-        _transitionDirection = -1;
-      } else {
-        _transitionDirection = 0;
-      }
-    } else {
-      _transitionDirection = 0;
-    }
-
-    _dragDx = 0;
   }
 
   @override
@@ -184,52 +108,12 @@ class _PwaShellScaffoldState extends State<PwaShellScaffold> {
       ),
     ];
 
-    final dragOffset = _isTabRootLocation(widget.location) ? _dragDx : 0.0;
-
     return Scaffold(
       extendBody: true,
       body: SafeArea(
         top: true,
         bottom: false,
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onHorizontalDragStart: (_) {
-            if (!_isTabRootLocation(widget.location)) {
-              return;
-            }
-            if (_dragDx != 0) {
-              setState(() {
-                _dragDx = 0;
-              });
-            }
-          },
-          onHorizontalDragUpdate: (details) {
-            if (!_isTabRootLocation(widget.location)) {
-              return;
-            }
-            setState(() {
-              _dragDx = (_dragDx + details.delta.dx).clamp(-64.0, 64.0);
-            });
-          },
-          onHorizontalDragCancel: () {
-            if (_dragDx == 0) {
-              return;
-            }
-            setState(() {
-              _dragDx = 0;
-            });
-          },
-          onHorizontalDragEnd: (details) {
-            _onHorizontalDragEnd(context, details, selectedIndex);
-          },
-          child: Transform.translate(
-            offset: Offset(dragOffset, 0),
-            // GoRouter manages navigator/page keys internally. Wrapping routed
-            // content in AnimatedSwitcher+KeyedSubtree can duplicate those keys
-            // on rebuild and trigger "Duplicate GlobalKey" in the simulator.
-            child: widget.child,
-          ),
-        ),
+        child: widget.child,
       ),
       bottomNavigationBar: AnimatedBuilder(
         animation: cartStore,
