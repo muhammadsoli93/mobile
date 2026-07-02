@@ -978,10 +978,22 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return '';
     }
     final id = order.id.trim();
-    if (id.isNotEmpty) {
+    if (_isValidMbankAccount(id)) {
       return id;
     }
-    return order.number.trim();
+    final number = order.number.trim();
+    if (_isValidMbankAccount(number)) {
+      return number;
+    }
+    return '';
+  }
+
+  bool _isValidMbankAccount(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return !normalized.toLowerCase().startsWith('order-');
   }
 
   Uri? _buildMbankDeeplink(CustomerOrder? order) {
@@ -1003,11 +1015,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     };
 
     final account = _resolveAccount(order);
-    if (account.isNotEmpty) {
-      query['PARAM1'] = account;
-      // Legacy compatibility for providers that still read `account`.
-      query['account'] = account;
+    if (account.isEmpty) {
+      return null;
     }
+    query['PARAM1'] = account;
+    // Legacy compatibility for providers that still read `account`.
+    query['account'] = account;
 
     final amount = order?.totalPrice ?? _app.cart.total;
     if (amount > 0) {
@@ -1085,10 +1098,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (!launched) {
       final bool hasService = _mbankServiceId.trim().isNotEmpty ||
           _mbankDeeplinkService.trim().isNotEmpty;
+      final bool hasMbankAccount = _resolveAccount(result.order).isNotEmpty;
       final String fallbackMessage = _selectedPaymentMethod == 'mbank'
-          ? hasService
-              ? 'Заказ создан, но MBank не открылся автоматически. Проверьте установку приложения MBank.'
-              : 'Заказ создан. Для автозапуска оплаты задайте MBANK_SERVICE_ID (или MBANK_DEEPLINK_SERVICE).'
+          ? !hasMbankAccount
+              ? 'Заказ создан, но не удалось получить номер заказа для оплаты MBank. Откройте заказ и попробуйте оплатить позже.'
+              : hasService
+                  ? 'Заказ создан, но MBank не открылся автоматически. Проверьте установку приложения MBank.'
+                  : 'Заказ создан. Для автозапуска оплаты задайте MBANK_SERVICE_ID (или MBANK_DEEPLINK_SERVICE).'
           : 'Заказ создан. Перенаправление в выбранный способ оплаты временно недоступно.';
       final snackBar = SnackBar(content: Text(fallbackMessage));
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
