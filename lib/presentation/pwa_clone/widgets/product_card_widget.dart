@@ -21,6 +21,7 @@ class ProductCardWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final stars = product.rating.round().clamp(0, 5);
     final catalogImage = product.catalogImage;
+    final imageKey = ValueKey<String>('${product.id}::$catalogImage');
 
     Widget buildImagePlaceholder() {
       return Container(
@@ -62,12 +63,12 @@ class ProductCardWidget extends StatelessWidget {
                         child: catalogImage.isEmpty
                             ? buildImagePlaceholder()
                             : Image.network(
+                                key: imageKey,
                                 catalogImage,
                                 fit: BoxFit.cover,
                                 filterQuality: FilterQuality.low,
                                 cacheWidth: 320,
                                 cacheHeight: 320,
-                                gaplessPlayback: true,
                                 frameBuilder:
                                     (context, child, frame, wasSyncLoaded) {
                                   if (wasSyncLoaded || frame != null) {

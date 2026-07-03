@@ -211,6 +211,72 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
     return _selectedCategoryId.isEmpty && _searchController.text.trim().isEmpty;
   }
 
+  String _productStableKey(ProductModel product) {
+    final id = product.id.trim();
+    if (id.isNotEmpty) {
+      return id;
+    }
+    final routeId = product.routeId.trim();
+    if (routeId.isNotEmpty) {
+      return routeId;
+    }
+    return '${product.title.trim()}::${product.catalogImage.trim()}';
+  }
+
+  int _stableHash(String value) {
+    var hash = 0;
+    for (final codeUnit in value.codeUnits) {
+      hash = (hash * 31 + codeUnit) & 0x3fffffff;
+    }
+    return hash;
+  }
+
+  List<ProductModel> _stableFeedOrder(Iterable<ProductModel> source) {
+    final products = source.toList(growable: false);
+    products.sort((a, b) {
+      final aKey = _productStableKey(a);
+      final bKey = _productStableKey(b);
+      final hashCompare = _stableHash(aKey).compareTo(_stableHash(bKey));
+      if (hashCompare != 0) {
+        return hashCompare;
+      }
+      return aKey.compareTo(bKey);
+    });
+    return products;
+  }
+
+  List<ProductModel> _mergeProductsKeepingCurrentOrder(
+    List<ProductModel> current,
+    List<ProductModel> incoming,
+  ) {
+    final incomingByKey = <String, ProductModel>{
+      for (final product in incoming) _productStableKey(product): product,
+    };
+    final merged = <ProductModel>[];
+    final seen = <String>{};
+
+    for (final product in current) {
+      final key = _productStableKey(product);
+      final updated = incomingByKey.remove(key);
+      if (updated != null) {
+        merged.add(updated);
+        seen.add(key);
+      } else if (seen.add(key)) {
+        merged.add(product);
+      }
+    }
+
+    for (final product in incoming) {
+      final key = _productStableKey(product);
+      final added = incomingByKey.remove(key);
+      if (added != null && seen.add(key)) {
+        merged.add(added);
+      }
+    }
+
+    return merged;
+  }
+
   void _startHeroRotation() {
     if (!widget.showHero) {
       return;
@@ -472,11 +538,13 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
           return;
         }
 
-        final products = <ProductModel>[...firstPage.results];
-        products.shuffle(Random());
+        final products = _stableFeedOrder(firstPage.results);
+        final nextProducts = preserveExisting
+            ? _mergeProductsKeepingCurrentOrder(_products, products)
+            : products;
 
         setState(() {
-          _products = products;
+          _products = nextProducts;
           _nextPage = firstPage.nextPage;
           _hasMore = firstPage.hasMore;
           _allModeNextPagesByCategory.clear();
@@ -503,11 +571,13 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
           return;
         }
 
-        final products = <ProductModel>[...firstPage.results];
-        products.shuffle(Random());
+        final products = _stableFeedOrder(firstPage.results);
+        final nextProducts = preserveExisting
+            ? _mergeProductsKeepingCurrentOrder(_products, products)
+            : products;
 
         setState(() {
-          _products = products;
+          _products = nextProducts;
           _nextPage = firstPage.nextPage;
           _hasMore = firstPage.hasMore;
         });
@@ -736,6 +806,36 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
     return mixed;
   }
 
+  List<ProductModel> _keepVisibleGridOrder(List<ProductModel> ordered) {
+    if (_orderedGridCache.isEmpty) {
+      return ordered;
+    }
+
+    final remaining = <String, ProductModel>{
+      for (final product in ordered) _productStableKey(product): product,
+    };
+    final stable = <ProductModel>[];
+    final seen = <String>{};
+
+    for (final previous in _orderedGridCache) {
+      final key = _productStableKey(previous);
+      final current = remaining.remove(key);
+      if (current != null && seen.add(key)) {
+        stable.add(current);
+      }
+    }
+
+    for (final product in ordered) {
+      final key = _productStableKey(product);
+      final current = remaining.remove(key);
+      if (current != null && seen.add(key)) {
+        stable.add(current);
+      }
+    }
+
+    return stable;
+  }
+
   List<ProductModel> get _orderedProductsForGrid {
     final query = _searchController.text.trim().toLowerCase();
     final cacheHit = identical(_orderedGridCacheProductsRef, _products) &&
@@ -764,7 +864,12 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
                 .toList(growable: false);
           }();
 
-    final ordered = _isAllCategoryMode ? _mixAllCategoryProducts(base) : base;
+    final nextOrder = _isAllCategoryMode ? _mixAllCategoryProducts(base) : base;
+    final canKeepVisibleOrder = _orderedGridCacheQuery == query &&
+        _orderedGridCacheSelectedCategoryId == _selectedCategoryId &&
+        _orderedGridCacheShowHero == widget.showHero;
+    final ordered =
+        canKeepVisibleOrder ? _keepVisibleGridOrder(nextOrder) : nextOrder;
     _orderedGridCacheProductsRef = _products;
     _orderedGridCacheCategoriesRef = _categories;
     _orderedGridCacheQuery = query;
@@ -909,7 +1014,7 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
                   _selectedCategoryId = categoryId;
                   _visibleProductsLimit = _productsChunkSize;
                 });
-                _loadInitial(preserveExisting: _products.isNotEmpty);
+                _loadInitial();
               },
             ),
             if (widget.showFavorites && !isSearchActive) ...[
@@ -954,6 +1059,9 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
                     final item = favorites[index];
                     final product = _favoriteToProduct(item);
                     return ProductCardWidget(
+                      key: ValueKey<String>(
+                        'favorite-${_productStableKey(product)}',
+                      ),
                       product: product,
                       isFavorite: true,
                       onOpen: () => context.push('/product/${product.routeId}'),
@@ -1017,6 +1125,9 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
                 itemBuilder: (context, index) {
                   final product = visibleGridProducts[index];
                   return ProductCardWidget(
+                    key: ValueKey<String>(
+                      'home-${_productStableKey(product)}',
+                    ),
                     product: product,
                     isFavorite: _app.favorites.isFavorite(product.id),
                     onOpen: () => context.push('/product/${product.routeId}'),
@@ -1179,6 +1290,7 @@ class _HeroSlider extends StatelessWidget {
             itemBuilder: (context, index) {
               final product = products[index];
               return GestureDetector(
+                key: ValueKey<String>('hero-${product.id}'),
                 onTap: () => context.push('/product/${product.routeId}'),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(24),
