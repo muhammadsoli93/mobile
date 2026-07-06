@@ -38,6 +38,8 @@ class PwaShellScaffold extends StatefulWidget {
 
 class _PwaShellScaffoldState extends State<PwaShellScaffold> {
   late final PageController _pageController;
+  int? _routeDrivenPageIndex;
+  DateTime? _lastTabNavigationAt;
   int _reselectToken = 0;
 
   static const List<String> _tabPaths = <String>[
@@ -47,14 +49,30 @@ class _PwaShellScaffoldState extends State<PwaShellScaffold> {
     '/profile',
   ];
 
-  int _indexFromLocation(String path) {
+  String _pathOnly(String location) {
+    return Uri.tryParse(location)?.path ?? location;
+  }
+
+  bool _hasQueryOrFragment(String location) {
+    final uri = Uri.tryParse(location);
+    if (uri == null) {
+      return location.contains('?') || location.contains('#');
+    }
+    return uri.hasQuery || uri.hasFragment;
+  }
+
+  int _indexFromLocation(String location) {
+    final path = _pathOnly(location);
     if (path == '/') return 0;
     if (path.startsWith('/catalog') || path.startsWith('/product/')) return 1;
     if (path.startsWith('/cart') || path.startsWith('/checkout')) return 2;
     return 3;
   }
 
-  bool _isTabRootLocation(String path) => _tabPaths.contains(path);
+  bool _isTabRootLocation(String location) {
+    return _tabPaths.contains(_pathOnly(location)) &&
+        !_hasQueryOrFragment(location);
+  }
 
   String _pathFromIndex(int index) {
     final safeIndex = index.clamp(0, _tabPaths.length - 1);
@@ -84,17 +102,50 @@ class _PwaShellScaffoldState extends State<PwaShellScaffold> {
     if (_isTabRootLocation(widget.location) && _pageController.hasClients) {
       final currentPage = _pageController.page?.round() ?? 0;
       if (currentPage != newIndex) {
+        _routeDrivenPageIndex = newIndex;
         _pageController.jumpToPage(newIndex);
       }
     }
   }
 
   void _onPageChanged(int index) {
+    if (_routeDrivenPageIndex == index) {
+      _routeDrivenPageIndex = null;
+      return;
+    }
+    if (index == _indexFromLocation(widget.location)) {
+      return;
+    }
     HapticFeedback.selectionClick();
     context.go(_pathFromIndex(index));
   }
 
-  void _onTap(BuildContext context, int index, int selectedIndex) {
+  bool _canNavigateTabs() {
+    final last = _lastTabNavigationAt;
+    final now = DateTime.now();
+    if (last != null && now.difference(last).inMilliseconds < 220) {
+      return false;
+    }
+    _lastTabNavigationAt = now;
+    return true;
+  }
+
+  void _onTap(
+    BuildContext context,
+    int index,
+    int selectedIndex,
+    bool isOnTabRoot,
+  ) {
+    final targetPath = _pathFromIndex(index);
+
+    if (index == selectedIndex && !isOnTabRoot) {
+      if (widget.location != targetPath && _canNavigateTabs()) {
+        HapticFeedback.selectionClick();
+        context.go(targetPath);
+      }
+      return;
+    }
+
     if (index == selectedIndex && (index == 0 || index == 1)) {
       _reselectToken += 1;
       pwaTabReselectNotifier.value = PwaTabReselectEvent(
@@ -104,8 +155,9 @@ class _PwaShellScaffoldState extends State<PwaShellScaffold> {
       return;
     }
     if (index == selectedIndex) return;
+    if (!_canNavigateTabs()) return;
     HapticFeedback.selectionClick();
-    context.go(_pathFromIndex(index));
+    context.go(targetPath);
   }
 
   @override
@@ -165,8 +217,7 @@ class _PwaShellScaffoldState extends State<PwaShellScaffold> {
         animation: cartStore,
         builder: (context, _) {
           final systemBottomInset = MediaQuery.of(context).viewPadding.bottom;
-          final bottomPad =
-              Platform.isIOS ? 8.0 : 12.0 + systemBottomInset;
+          final bottomPad = Platform.isIOS ? 8.0 : 12.0 + systemBottomInset;
           return Padding(
             padding: EdgeInsets.fromLTRB(12, 0, 12, bottomPad),
             child: Align(
@@ -204,8 +255,12 @@ class _PwaShellScaffoldState extends State<PwaShellScaffold> {
                           return Expanded(
                             child: InkWell(
                               borderRadius: BorderRadius.circular(16),
-                              onTap: () =>
-                                  _onTap(context, index, selectedIndex),
+                              onTap: () => _onTap(
+                                context,
+                                index,
+                                selectedIndex,
+                                isOnTabRoot,
+                              ),
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 220),
                                 curve: Curves.easeOutCubic,

@@ -295,6 +295,15 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant ProductsFeedScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialCategoryId == widget.initialCategoryId) {
+      return;
+    }
+    _selectCategory(_routeInitialCategoryId);
+  }
+
+  @override
   void dispose() {
     _backgroundPrefetchSession += 1;
     _backgroundPrefetching = false;
@@ -353,6 +362,39 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
     setState(() {
       _visibleProductsLimit = _productsChunkSize;
     });
+  }
+
+  void _clearGridOrderCache() {
+    _orderedGridCacheProductsRef = null;
+    _orderedGridCacheCategoriesRef = null;
+    _orderedGridCacheQuery = '';
+    _orderedGridCacheSelectedCategoryId = '';
+    _orderedGridCacheShowHero = false;
+    _orderedGridCache = const <ProductModel>[];
+  }
+
+  void _selectCategory(String categoryId) {
+    final normalizedCategoryId = categoryId.trim();
+    if (normalizedCategoryId == _selectedCategoryId && !_loading) {
+      return;
+    }
+    _backgroundPrefetchSession += 1;
+    _backgroundPrefetching = false;
+    setState(() {
+      _selectedCategoryId = normalizedCategoryId;
+      _products = <ProductModel>[];
+      _visibleProductsLimit = _productsChunkSize;
+      _hasMore = true;
+      _nextPage = 2;
+      _allModeNextPagesByCategory.clear();
+      _allModeHasMoreByCategory.clear();
+      _allModeGeneralNextPage = null;
+      _allModeGeneralHasMore = false;
+      _loadingMore = false;
+      _clearGridOrderCache();
+    });
+    _scrollToTop();
+    unawaited(_loadInitial());
   }
 
   bool get _isAllCategoryMode {
@@ -684,9 +726,7 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
   void _writeCachedCategories(List<CategoryModel> categories) {
     _app.storage.write(
       _categoryDiskCacheKey,
-      categories
-          .map((c) => c.toJson())
-          .toList(growable: false),
+      categories.map((c) => c.toJson()).toList(growable: false),
     );
   }
 
@@ -750,8 +790,7 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
           // If cache was used, refresh categories in parallel.
           final results = await (cachedCategories != null
               ? Future.wait<dynamic>([
-                  freshCategoriesFuture.catchError(
-                      (_) => cachedCategories),
+                  freshCategoriesFuture.catchError((_) => cachedCategories),
                   _fetchProductsWithRetry(page: 1),
                 ])
               : Future.wait<dynamic>([
@@ -815,8 +854,7 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
           // in parallel → total wait is max(products, cats) ≈ 2s instead of 4s.
           final results = await (cachedCategories != null
               ? Future.wait<dynamic>([
-                  freshCategoriesFuture.catchError(
-                      (_) => cachedCategories),
+                  freshCategoriesFuture.catchError((_) => cachedCategories),
                   productPagesFuture,
                 ])
               : Future.wait<dynamic>([
@@ -1361,13 +1399,7 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
               loading: _loading && _categories.isEmpty,
               selectedCategoryId: _selectedCategoryId,
               categories: _categories,
-              onSelect: (categoryId) {
-                setState(() {
-                  _selectedCategoryId = categoryId;
-                  _visibleProductsLimit = _productsChunkSize;
-                });
-                _loadInitial(preserveExisting: _products.isNotEmpty);
-              },
+              onSelect: _selectCategory,
             ),
             if (widget.showFavorites && !isSearchActive) ...[
               const SizedBox(height: 18),

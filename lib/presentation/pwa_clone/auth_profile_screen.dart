@@ -9,6 +9,7 @@ import 'package:kumarket/app_core/app_store.dart';
 import 'package:kumarket/app_core/models.dart';
 import 'package:kumarket/presentation/pwa_clone/adult_content_guard.dart';
 import 'package:kumarket/presentation/pwa_clone/widgets/product_card_widget.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key, required this.redirectPath});
@@ -267,7 +268,8 @@ class _AuthScreenState extends State<AuthScreen> {
                   TextField(
                     controller: _codeController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Код из WhatsApp'),
+                    decoration:
+                        const InputDecoration(labelText: 'Код из WhatsApp'),
                   ),
                   const SizedBox(height: 8),
                   TextButton(
@@ -389,7 +391,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       description: '',
       rating: item.rating ?? 0,
       reviewsCount: item.reviewsCount ?? 0,
-      images: [ProductImageModel(url: img, isMain: true, thumbUrl: img, mediumUrl: img, largeUrl: img)],
+      images: [
+        ProductImageModel(
+            url: img,
+            isMain: true,
+            thumbUrl: img,
+            mediumUrl: img,
+            largeUrl: img)
+      ],
       imageThumb: img,
       imageMedium: img,
       imageLarge: img,
@@ -541,11 +550,110 @@ class _ProfileScreenState extends State<ProfileScreen> {
     context.go('/auth?redirect=${Uri.encodeComponent('/profile')}');
   }
 
-  Future<void> _openContacts() async {
-    await Clipboard.setData(const ClipboardData(text: 'Nookaat@yandex.ru'));
+  static const String _supportEmail = 'Nookaat@yandex.ru';
+  static const String _supportPhone = '+996755551000';
+
+  Future<void> _copyContactValue(String label, String value) async {
+    await Clipboard.setData(ClipboardData(text: value));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Email скопирован: Nookaat@yandex.ru')),
+      SnackBar(content: Text('$label скопирован: $value')),
+    );
+  }
+
+  Future<void> _openContactUri({
+    required Uri uri,
+    required String fallbackLabel,
+    required String fallbackValue,
+  }) async {
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (opened) return;
+    } catch (_) {
+      // If no suitable app is installed, copy the contact instead.
+    }
+    await _copyContactValue(fallbackLabel, fallbackValue);
+  }
+
+  Future<void> _openContacts() async {
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Контакты KuMarket',
+                  style: TextStyle(
+                    color: Color(0xFF111827),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Свяжитесь с поддержкой удобным способом.',
+                  style: TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _ContactTile(
+                  icon: Icons.mail_outline_rounded,
+                  iconColor: const Color(0xFFF472B6),
+                  title: 'Email',
+                  value: _supportEmail,
+                  actionText: 'Написать',
+                  onOpen: () {
+                    Navigator.of(sheetContext).pop();
+                    _openContactUri(
+                      uri: Uri(
+                        scheme: 'mailto',
+                        path: _supportEmail,
+                        queryParameters: const {
+                          'subject': 'KuMarket support',
+                        },
+                      ),
+                      fallbackLabel: 'Email',
+                      fallbackValue: _supportEmail,
+                    );
+                  },
+                  onCopy: () => _copyContactValue('Email', _supportEmail),
+                ),
+                const SizedBox(height: 10),
+                _ContactTile(
+                  icon: Icons.phone_in_talk_outlined,
+                  iconColor: const Color(0xFF22C55E),
+                  title: 'Телефон',
+                  value: _supportPhone,
+                  actionText: 'Позвонить',
+                  onOpen: () {
+                    Navigator.of(sheetContext).pop();
+                    _openContactUri(
+                      uri: Uri(scheme: 'tel', path: _supportPhone),
+                      fallbackLabel: 'Телефон',
+                      fallbackValue: _supportPhone,
+                    );
+                  },
+                  onCopy: () => _copyContactValue('Телефон', _supportPhone),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -569,7 +677,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const _InfoBanner(
             ok: false,
-            text: 'Вы не авторизованы. Доступны настройки и документы. Для заказов выполните вход.',
+            text:
+                'Вы не авторизованы. Доступны настройки и документы. Для заказов выполните вход.',
           ),
           const SizedBox(height: 14),
           const _SectionTitle('Аккаунт'),
@@ -612,7 +721,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 8),
           _FavoritesSection(
             favorites: _app.favorites.items,
-            onOpen: (item) => unawaited(_openFavoriteProduct(_favoriteToProduct(item))),
+            onOpen: (item) =>
+                unawaited(_openFavoriteProduct(_favoriteToProduct(item))),
             onRemove: (item) => _app.favorites.toggleStored(item),
           ),
           const SizedBox(height: 14),
@@ -790,7 +900,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 8),
           _FavoritesSection(
             favorites: _app.favorites.items,
-            onOpen: (item) => unawaited(_openFavoriteProduct(_favoriteToProduct(item))),
+            onOpen: (item) =>
+                unawaited(_openFavoriteProduct(_favoriteToProduct(item))),
             onRemove: (item) => _app.favorites.toggleStored(item),
           ),
           const SizedBox(height: 14),
@@ -1029,6 +1140,101 @@ class _InitialsAvatar extends StatelessWidget {
             color: Color(0xFFEF0909),
             fontSize: 24,
             fontWeight: FontWeight.w900),
+      ),
+    );
+  }
+}
+
+class _ContactTile extends StatelessWidget {
+  const _ContactTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.value,
+    required this.actionText,
+    required this.onOpen,
+    required this.onCopy,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String value;
+  final String actionText;
+  final VoidCallback onOpen;
+  final VoidCallback onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5E8EF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Color(0xFF111827),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onCopy,
+                  child: const Text('Копировать'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  onPressed: onOpen,
+                  child: Text(actionText),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1455,7 +1661,14 @@ class _FavoritesSection extends StatelessWidget {
             description: '',
             rating: item.rating ?? 0,
             reviewsCount: item.reviewsCount ?? 0,
-            images: [ProductImageModel(url: img, isMain: true, thumbUrl: img, mediumUrl: img, largeUrl: img)],
+            images: [
+              ProductImageModel(
+                  url: img,
+                  isMain: true,
+                  thumbUrl: img,
+                  mediumUrl: img,
+                  largeUrl: img)
+            ],
             imageThumb: img,
             imageMedium: img,
             imageLarge: img,

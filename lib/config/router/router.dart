@@ -61,7 +61,7 @@ final router = GoRouter(
     ShellRoute(
       builder: (context, state, child) {
         return PwaShellScaffold(
-          location: state.uri.path,
+          location: state.uri.toString(),
           child: child,
         );
       },
