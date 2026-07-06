@@ -608,12 +608,6 @@ class _CartScreenState extends State<CartScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 18),
-          const _CartSectionTitle(
-            title: 'Товары для вас',
-            icon: Icons.local_fire_department_rounded,
-          ),
-          const SizedBox(height: 8),
           if (_recommendationsLoading)
             const _RecommendationsSkeleton()
           else if (_orderedRecommendationProducts.isEmpty)
@@ -866,34 +860,6 @@ class _SummaryRow extends StatelessWidget {
   }
 }
 
-class _CartSectionTitle extends StatelessWidget {
-  const _CartSectionTitle({
-    required this.title,
-    required this.icon,
-  });
-
-  final String title;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, color: const Color(0xFF7B2CF5), size: 20),
-        const SizedBox(width: 6),
-        Text(
-          title,
-          style: const TextStyle(
-            color: Color(0xFF111827),
-            fontSize: 32,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.6,
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 class _RecommendationsSkeleton extends StatelessWidget {
   const _RecommendationsSkeleton();

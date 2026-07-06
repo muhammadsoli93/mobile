@@ -666,6 +666,30 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
     );
   }
 
+  static const String _categoryDiskCacheKey = 'ku_categories_v1';
+
+  List<CategoryModel>? _readCachedCategories() {
+    final raw = _app.storage.read<List>(_categoryDiskCacheKey);
+    if (raw == null) return null;
+    try {
+      return raw
+          .whereType<Map<String, dynamic>>()
+          .map(CategoryModel.fromJson)
+          .toList(growable: false);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _writeCachedCategories(List<CategoryModel> categories) {
+    _app.storage.write(
+      _categoryDiskCacheKey,
+      categories
+          .map((c) => c.toJson())
+          .toList(growable: false),
+    );
+  }
+
   Future<void> _loadInitial({bool preserveExisting = false}) async {
     final requestVersion = ++_catalogRequestVersion;
     final categoryIdSnapshot = _selectedCategoryId;
@@ -689,53 +713,77 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
     });
 
     try {
-      // Fetch categories and first products page in parallel to cut cold-start
-      // wait from ~4s to ~2s.
-      final prefetchCategoryId = allModeSnapshot
-          ? null
-          : (categoryIdSnapshot.isEmpty ? null : categoryIdSnapshot);
-      final parallel = await Future.wait<dynamic>([
-        _app.api.fetchCategories(),
-        _fetchProductsWithRetry(page: 1, categoryId: prefetchCategoryId)
-            .catchError(
-          (_) => const PaginatedProducts(
-            results: <ProductModel>[],
-            nextPage: null,
-            hasMore: false,
-          ),
-        ),
-      ]);
+      // Load disk-cached categories immediately (0 ms) to skip one network
+      // round-trip on every cold start after the very first one.
+      final cachedCategories = _readCachedCategories();
+      final freshCategoriesFuture = _app.api.fetchCategories();
 
-      if (!mounted) {
-        return;
+      List<CategoryModel> categoriesToUse;
+      if (cachedCategories != null && cachedCategories.isNotEmpty) {
+        // Apply cached categories right away so the UI can show filter chips
+        // while products are still loading.
+        setState(() => _categories = cachedCategories);
+        _precacheCategoryIcons(cachedCategories);
+        categoriesToUse = cachedCategories;
+      } else {
+        // No disk cache yet (first launch) — must wait for network.
+        categoriesToUse = await freshCategoriesFuture;
+        if (!mounted) {
+          return;
+        }
+        if (requestVersion != _catalogRequestVersion ||
+            categoryIdSnapshot != _selectedCategoryId) {
+          return;
+        }
+        setState(() => _categories = categoriesToUse);
+        _precacheCategoryIcons(categoriesToUse);
+        _writeCachedCategories(categoriesToUse);
       }
-      if (requestVersion != _catalogRequestVersion ||
-          categoryIdSnapshot != _selectedCategoryId) {
-        return;
-      }
 
-      final categories = parallel[0] as List<CategoryModel>;
-      final prefetchedPage = parallel[1] as PaginatedProducts;
-
-      setState(() {
-        _categories = categories;
-      });
-      _precacheCategoryIcons(categories);
       if (allModeSnapshot) {
-        final allModeCategories = categories
+        final allModeCategories = categoriesToUse
             .where((category) => category.id.trim().isNotEmpty)
             .toList(growable: false);
 
         if (allModeCategories.isEmpty) {
-          // No categories — use the pre-fetched general products directly.
+          // No categories: fetch general products.
+          // If cache was used, refresh categories in parallel.
+          final results = await (cachedCategories != null
+              ? Future.wait<dynamic>([
+                  freshCategoriesFuture.catchError(
+                      (_) => cachedCategories),
+                  _fetchProductsWithRetry(page: 1),
+                ])
+              : Future.wait<dynamic>([
+                  Future<List<CategoryModel>>.value(categoriesToUse),
+                  _fetchProductsWithRetry(page: 1),
+                ]));
+
+          if (!mounted) {
+            return;
+          }
+          if (requestVersion != _catalogRequestVersion ||
+              categoryIdSnapshot != _selectedCategoryId) {
+            return;
+          }
+
+          final freshCats = results[0] as List<CategoryModel>;
+          final firstPage = results[1] as PaginatedProducts;
+
+          if (cachedCategories != null) {
+            _writeCachedCategories(freshCats);
+            setState(() => _categories = freshCats);
+            _precacheCategoryIcons(freshCats);
+          }
+
           setState(() {
-            _products = <ProductModel>[...prefetchedPage.results];
-            _nextPage = prefetchedPage.nextPage;
-            _hasMore = prefetchedPage.hasMore;
+            _products = <ProductModel>[...firstPage.results];
+            _nextPage = firstPage.nextPage;
+            _hasMore = firstPage.hasMore;
             _allModeNextPagesByCategory.clear();
             _allModeHasMoreByCategory.clear();
-            _allModeGeneralNextPage = prefetchedPage.nextPage;
-            _allModeGeneralHasMore = prefetchedPage.hasMore;
+            _allModeGeneralNextPage = firstPage.nextPage;
+            _allModeGeneralHasMore = firstPage.hasMore;
           });
           _saveToCache();
         } else {
@@ -746,15 +794,8 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
               .skip(_initialAllModeCategoryCount)
               .toList(growable: false);
 
-          // Show pre-fetched general products immediately so user sees content
-          // at ~2s while per-category fetches run in the background.
-          if (prefetchedPage.results.isNotEmpty) {
-            setState(() {
-              _products = <ProductModel>[...prefetchedPage.results];
-            });
-          }
-
-          final firstPages = await Future.wait<PaginatedProducts>(
+          // Per-category product fetches — start them now.
+          final productPagesFuture = Future.wait<PaginatedProducts>(
             initialCategories.map((category) {
               return _fetchProductsWithRetry(
                 page: 1,
@@ -770,12 +811,34 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
             }),
           );
 
+          // When cache was used: product fetches and fresh-categories fetch run
+          // in parallel → total wait is max(products, cats) ≈ 2s instead of 4s.
+          final results = await (cachedCategories != null
+              ? Future.wait<dynamic>([
+                  freshCategoriesFuture.catchError(
+                      (_) => cachedCategories),
+                  productPagesFuture,
+                ])
+              : Future.wait<dynamic>([
+                  Future<List<CategoryModel>>.value(categoriesToUse),
+                  productPagesFuture,
+                ]));
+
           if (!mounted) {
             return;
           }
           if (requestVersion != _catalogRequestVersion ||
               categoryIdSnapshot != _selectedCategoryId) {
             return;
+          }
+
+          final freshCats = results[0] as List<CategoryModel>;
+          final firstPages = results[1] as List<PaginatedProducts>;
+
+          if (cachedCategories != null) {
+            _writeCachedCategories(freshCats);
+            setState(() => _categories = freshCats);
+            _precacheCategoryIcons(freshCats);
           }
 
           final merged = <String, ProductModel>{};
@@ -822,12 +885,44 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
           }
         }
       } else {
-        // Specific-category mode — pre-fetched alongside categories above.
-        final products = <ProductModel>[...prefetchedPage.results];
+        // Specific-category mode.
+        // Product fetch starts now; fresh categories refresh in parallel when cache exists.
+        final productFuture = _fetchProductsWithRetry(
+          page: 1,
+          categoryId: categoryIdSnapshot.isEmpty ? null : categoryIdSnapshot,
+        );
+
+        final results = await (cachedCategories != null
+            ? Future.wait<dynamic>([
+                freshCategoriesFuture.catchError((_) => cachedCategories),
+                productFuture,
+              ])
+            : Future.wait<dynamic>([
+                Future<List<CategoryModel>>.value(categoriesToUse),
+                productFuture,
+              ]));
+
+        if (!mounted) {
+          return;
+        }
+        if (requestVersion != _catalogRequestVersion ||
+            categoryIdSnapshot != _selectedCategoryId) {
+          return;
+        }
+
+        final freshCats = results[0] as List<CategoryModel>;
+        final firstPage = results[1] as PaginatedProducts;
+
+        if (cachedCategories != null) {
+          _writeCachedCategories(freshCats);
+          setState(() => _categories = freshCats);
+          _precacheCategoryIcons(freshCats);
+        }
+
         setState(() {
-          _products = products;
-          _nextPage = prefetchedPage.nextPage;
-          _hasMore = prefetchedPage.hasMore;
+          _products = <ProductModel>[...firstPage.results];
+          _nextPage = firstPage.nextPage;
+          _hasMore = firstPage.hasMore;
         });
         _saveToCache();
         _scheduleBackgroundPrefetch(
@@ -1327,12 +1422,6 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
                   },
                 ),
             ],
-            const SizedBox(height: 18),
-            _SectionTitle(
-              title: isSearchActive ? 'Результаты поиска' : 'Товары для вас',
-              icon: Icons.local_fire_department_rounded,
-            ),
-            const SizedBox(height: 8),
             if (showInitialSkeleton)
               const _ProductsSkeleton()
             else if (orderedGridProducts.isEmpty)

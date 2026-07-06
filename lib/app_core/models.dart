@@ -1087,6 +1087,13 @@ class CategoryModel {
       productsCount: toSafeInt(json['products_count'] ?? json['item_qty']),
     );
   }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'name': name,
+        'image': image,
+        'products_count': productsCount,
+      };
 }
 
 class PaginatedProducts {
