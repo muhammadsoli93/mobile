@@ -736,34 +736,35 @@ class ApiService {
             headers['Content-Type'] = 'application/json';
           }
 
+          const kTimeout = Duration(seconds: 12);
           late final http.Response response;
           switch (method.toUpperCase()) {
             case 'GET':
-              response = await _client.get(uri, headers: headers);
+              response = await _client
+                  .get(uri, headers: headers)
+                  .timeout(kTimeout);
               break;
             case 'POST':
-              response = await _client.post(
-                uri,
-                headers: headers,
-                body: body == null ? null : jsonEncode(body),
-              );
+              response = await _client
+                  .post(uri, headers: headers,
+                      body: body == null ? null : jsonEncode(body))
+                  .timeout(kTimeout);
               break;
             case 'PUT':
-              response = await _client.put(
-                uri,
-                headers: headers,
-                body: body == null ? null : jsonEncode(body),
-              );
+              response = await _client
+                  .put(uri, headers: headers,
+                      body: body == null ? null : jsonEncode(body))
+                  .timeout(kTimeout);
               break;
             case 'PATCH':
-              response = await _client.patch(
-                uri,
-                headers: headers,
-                body: body == null ? null : jsonEncode(body),
-              );
+              response = await _client
+                  .patch(uri, headers: headers,
+                      body: body == null ? null : jsonEncode(body))
+                  .timeout(kTimeout);
               break;
             case 'DELETE':
-              response = await _client.delete(uri, headers: headers);
+              response =
+                  await _client.delete(uri, headers: headers).timeout(kTimeout);
               break;
             default:
               throw ApiException(message: 'Unsupported method: $method');

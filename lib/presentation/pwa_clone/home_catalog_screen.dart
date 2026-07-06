@@ -689,7 +689,22 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
     });
 
     try {
-      final categories = await _app.api.fetchCategories();
+      // Fetch categories and first products page in parallel to cut cold-start
+      // wait from ~4s to ~2s.
+      final prefetchCategoryId = allModeSnapshot
+          ? null
+          : (categoryIdSnapshot.isEmpty ? null : categoryIdSnapshot);
+      final parallel = await Future.wait<dynamic>([
+        _app.api.fetchCategories(),
+        _fetchProductsWithRetry(page: 1, categoryId: prefetchCategoryId)
+            .catchError(
+          (_) => const PaginatedProducts(
+            results: <ProductModel>[],
+            nextPage: null,
+            hasMore: false,
+          ),
+        ),
+      ]);
 
       if (!mounted) {
         return;
@@ -698,6 +713,10 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
           categoryIdSnapshot != _selectedCategoryId) {
         return;
       }
+
+      final categories = parallel[0] as List<CategoryModel>;
+      final prefetchedPage = parallel[1] as PaginatedProducts;
+
       setState(() {
         _categories = categories;
       });
@@ -708,24 +727,15 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
             .toList(growable: false);
 
         if (allModeCategories.isEmpty) {
-          final firstPage = await _fetchProductsWithRetry(page: 1);
-
-          if (!mounted) {
-            return;
-          }
-          if (requestVersion != _catalogRequestVersion ||
-              categoryIdSnapshot != _selectedCategoryId) {
-            return;
-          }
-
+          // No categories — use the pre-fetched general products directly.
           setState(() {
-            _products = <ProductModel>[...firstPage.results];
-            _nextPage = firstPage.nextPage;
-            _hasMore = firstPage.hasMore;
+            _products = <ProductModel>[...prefetchedPage.results];
+            _nextPage = prefetchedPage.nextPage;
+            _hasMore = prefetchedPage.hasMore;
             _allModeNextPagesByCategory.clear();
             _allModeHasMoreByCategory.clear();
-            _allModeGeneralNextPage = firstPage.nextPage;
-            _allModeGeneralHasMore = firstPage.hasMore;
+            _allModeGeneralNextPage = prefetchedPage.nextPage;
+            _allModeGeneralHasMore = prefetchedPage.hasMore;
           });
           _saveToCache();
         } else {
@@ -735,6 +745,14 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
           final remainingCategories = allModeCategories
               .skip(_initialAllModeCategoryCount)
               .toList(growable: false);
+
+          // Show pre-fetched general products immediately so user sees content
+          // at ~2s while per-category fetches run in the background.
+          if (prefetchedPage.results.isNotEmpty) {
+            setState(() {
+              _products = <ProductModel>[...prefetchedPage.results];
+            });
+          }
 
           final firstPages = await Future.wait<PaginatedProducts>(
             initialCategories.map((category) {
@@ -804,25 +822,12 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
           }
         }
       } else {
-        final firstPage = await _fetchProductsWithRetry(
-          page: 1,
-          categoryId: categoryIdSnapshot.isEmpty ? null : categoryIdSnapshot,
-        );
-
-        if (!mounted) {
-          return;
-        }
-        if (requestVersion != _catalogRequestVersion ||
-            categoryIdSnapshot != _selectedCategoryId) {
-          return;
-        }
-
-        final products = <ProductModel>[...firstPage.results];
-
+        // Specific-category mode — pre-fetched alongside categories above.
+        final products = <ProductModel>[...prefetchedPage.results];
         setState(() {
           _products = products;
-          _nextPage = firstPage.nextPage;
-          _hasMore = firstPage.hasMore;
+          _nextPage = prefetchedPage.nextPage;
+          _hasMore = prefetchedPage.hasMore;
         });
         _saveToCache();
         _scheduleBackgroundPrefetch(
