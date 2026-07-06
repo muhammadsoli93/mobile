@@ -269,9 +269,9 @@ class _PwaShellScaffoldState extends State<PwaShellScaffold> {
       bottomNavigationBar: AnimatedBuilder(
         animation: cartStore,
         builder: (context, _) {
-          return SafeArea(
-            top: false,
-            minimum: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          final systemBottomInset = MediaQuery.of(context).viewPadding.bottom;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(12, 0, 12, 12 + systemBottomInset),
             child: Align(
               alignment: Alignment.bottomCenter,
               child: ConstrainedBox(
