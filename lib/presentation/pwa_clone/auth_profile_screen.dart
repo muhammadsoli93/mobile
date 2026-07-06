@@ -6,6 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:kumarket/app_core/app_store.dart';
+import 'package:kumarket/app_core/models.dart';
+import 'package:kumarket/presentation/pwa_clone/adult_content_guard.dart';
+import 'package:kumarket/presentation/pwa_clone/widgets/product_card_widget.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key, required this.redirectPath});
@@ -362,15 +365,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _app.auth.addListener(_syncFromStore);
+    _app.favorites.addListener(_syncFromStore);
     _syncFromStore();
   }
 
   @override
   void dispose() {
     _app.auth.removeListener(_syncFromStore);
+    _app.favorites.removeListener(_syncFromStore);
     _nameController.dispose();
     _cityController.dispose();
     super.dispose();
+  }
+
+  ProductModel _favoriteToProduct(FavoriteItem item) {
+    final img = normalizeImageUrl(item.image);
+    return ProductModel(
+      id: item.productId,
+      slug: item.slug,
+      title: item.title,
+      price: item.price,
+      oldPrice: null,
+      description: '',
+      rating: item.rating ?? 0,
+      reviewsCount: item.reviewsCount ?? 0,
+      images: [ProductImageModel(url: img, isMain: true, thumbUrl: img, mediumUrl: img, largeUrl: img)],
+      imageThumb: img,
+      imageMedium: img,
+      imageLarge: img,
+      categoryId: '',
+      categoryName: '',
+      stock: null,
+      variants: const [],
+      isAdult: item.isAdult,
+      ageRestricted: item.ageRestricted,
+    );
+  }
+
+  Future<void> _openFavoriteProduct(ProductModel product) async {
+    await guardAdultProductAction(
+      context: context,
+      app: _app,
+      product: product,
+      onAllowed: () {
+        if (!mounted) return;
+        context.push('/product/${product.routeId}');
+      },
+    );
   }
 
   String _notificationsKey(String? phone) {
@@ -567,6 +608,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ]),
           const SizedBox(height: 14),
+          const _SectionTitle('Избранное'),
+          const SizedBox(height: 8),
+          _FavoritesSection(
+            favorites: _app.favorites.items,
+            onOpen: (item) => unawaited(_openFavoriteProduct(_favoriteToProduct(item))),
+            onRemove: (item) => _app.favorites.toggleStored(item),
+          ),
+          const SizedBox(height: 14),
           const _SectionTitle('Настройки'),
           const SizedBox(height: 8),
           _ProfileGroup(children: [
@@ -736,6 +785,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: () => context.push('/orders'),
             ),
           ]),
+          const SizedBox(height: 14),
+          const _SectionTitle('Избранное'),
+          const SizedBox(height: 8),
+          _FavoritesSection(
+            favorites: _app.favorites.items,
+            onOpen: (item) => unawaited(_openFavoriteProduct(_favoriteToProduct(item))),
+            onRemove: (item) => _app.favorites.toggleStored(item),
+          ),
           const SizedBox(height: 14),
           const _SectionTitle('Настройки'),
           const SizedBox(height: 8),
@@ -1341,6 +1398,87 @@ class _CurrencyPill extends StatelessWidget {
                 width: 16, height: 12, fit: BoxFit.cover),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _FavoritesSection extends StatelessWidget {
+  const _FavoritesSection({
+    required this.favorites,
+    required this.onOpen,
+    required this.onRemove,
+  });
+
+  final List<FavoriteItem> favorites;
+  final void Function(FavoriteItem) onOpen;
+  final void Function(FavoriteItem) onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    if (favorites.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0x1F3C3C43)),
+        ),
+        child: const Text(
+          'Нажмите на сердечко товара, чтобы добавить его в избранное.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Color(0xFF6B7280),
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 220,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: favorites.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final item = favorites[index];
+          final img = normalizeImageUrl(item.image);
+          final product = ProductModel(
+            id: item.productId,
+            slug: item.slug,
+            title: item.title,
+            price: item.price,
+            oldPrice: null,
+            description: '',
+            rating: item.rating ?? 0,
+            reviewsCount: item.reviewsCount ?? 0,
+            images: [ProductImageModel(url: img, isMain: true, thumbUrl: img, mediumUrl: img, largeUrl: img)],
+            imageThumb: img,
+            imageMedium: img,
+            imageLarge: img,
+            categoryId: '',
+            categoryName: '',
+            stock: null,
+            variants: const [],
+            isAdult: item.isAdult,
+            ageRestricted: item.ageRestricted,
+          );
+          return SizedBox(
+            width: 140,
+            child: ProductCardWidget(
+              product: product,
+              isFavorite: true,
+              isAdultRestricted: isAdultProduct(product),
+              canShowAdultContent: canShowAdultContent(AppStore.instance),
+              onOpen: () => onOpen(item),
+              onToggleFavorite: () => onRemove(item),
+              onAddToCart: () {},
+            ),
+          );
+        },
       ),
     );
   }

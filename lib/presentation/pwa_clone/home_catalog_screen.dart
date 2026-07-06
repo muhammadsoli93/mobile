@@ -158,7 +158,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return const ProductsFeedScreen(
       showHero: true,
-      showFavorites: true,
+      showFavorites: false,
       initialCategoryId: null,
       redirectPath: '/',
     );

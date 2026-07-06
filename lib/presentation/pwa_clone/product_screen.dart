@@ -502,24 +502,22 @@ class _ProductScreenState extends State<ProductScreen> {
       );
     }
 
-    return Container(
+    return SafeArea(
+      bottom: false,
+      child: Container(
       color: const Color(0xFFF2F2F7),
-      child: RefreshIndicator(
-        color: const Color(0xFF7B2CF5),
-        onRefresh: _load,
-        child: ListView(
-          controller: _scrollController,
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 132),
-          children: [
-            Row(
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 4, 4),
+            child: Row(
               children: [
                 Container(
-                  width: 36,
-                  height: 36,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(22),
                     border: Border.all(color: const Color(0x1F3C3C43)),
                   ),
                   child: IconButton(
@@ -532,7 +530,7 @@ class _ProductScreenState extends State<ProductScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     product.title,
@@ -558,7 +556,16 @@ class _ProductScreenState extends State<ProductScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+          ),
+          Expanded(
+            child: RefreshIndicator(
+              color: const Color(0xFF7B2CF5),
+              onRefresh: _load,
+              child: ListView(
+                controller: _scrollController,
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 132),
+                children: [
             SizedBox(
               height: 320,
               child: PageView.builder(
@@ -813,6 +820,10 @@ class _ProductScreenState extends State<ProductScreen> {
           ],
         ),
       ),
+    ),
+        ],
+      ),
+    ),
     );
   }
 }
