@@ -29,6 +29,28 @@ int toSafeInt(Object? value, {int fallback = 0}) {
   return fallback;
 }
 
+bool toSafeBool(Object? value, {bool fallback = false}) {
+  if (value is bool) {
+    return value;
+  }
+  if (value is num) {
+    return value != 0;
+  }
+  if (value is String) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return fallback;
+    }
+    if (const <String>{'1', 'true', 'yes', 'y', 'on'}.contains(normalized)) {
+      return true;
+    }
+    if (const <String>{'0', 'false', 'no', 'n', 'off'}.contains(normalized)) {
+      return false;
+    }
+  }
+  return fallback;
+}
+
 String toSafeString(Object? value, {String fallback = ''}) {
   if (value == null) {
     return fallback;
@@ -768,6 +790,8 @@ class ProductModel {
     required this.categoryName,
     required this.stock,
     required this.variants,
+    required this.isAdult,
+    required this.ageRestricted,
   });
 
   final String id;
@@ -786,9 +810,15 @@ class ProductModel {
   final String categoryName;
   final int? stock;
   final List<ProductVariantModel> variants;
+  final bool isAdult;
+  final bool ageRestricted;
+
+  bool get isAdultRestricted => isAdult || ageRestricted;
 
   ProductModel copyWith({
     String? description,
+    bool? isAdult,
+    bool? ageRestricted,
   }) {
     return ProductModel(
       id: id,
@@ -807,6 +837,8 @@ class ProductModel {
       categoryName: categoryName,
       stock: stock,
       variants: variants,
+      isAdult: isAdult ?? this.isAdult,
+      ageRestricted: ageRestricted ?? this.ageRestricted,
     );
   }
 
@@ -987,6 +1019,19 @@ class ProductModel {
     final hasStock = rawStock != null;
     final oldPriceValue = toSafeDouble(json['old_price']);
     final oldPrice = oldPriceValue > 0 ? oldPriceValue : null;
+    final isAdult = toSafeBool(
+      json['isAdult'] ??
+          json['is_adult'] ??
+          json['adult'] ??
+          json['adult_only'] ??
+          json['is_18_plus'],
+    );
+    final ageRestricted = toSafeBool(
+      json['ageRestricted'] ??
+          json['age_restricted'] ??
+          json['restricted_18'] ??
+          json['requires_age_confirmation'],
+    );
 
     return ProductModel(
       id: toSafeString(json['id']),
@@ -1010,6 +1055,8 @@ class ProductModel {
       categoryName: categoryName,
       stock: hasStock ? toSafeInt(rawStock) : null,
       variants: variants,
+      isAdult: isAdult,
+      ageRestricted: ageRestricted,
     );
   }
 }
@@ -1172,6 +1219,8 @@ class FavoriteItem {
     required this.image,
     required this.rating,
     required this.reviewsCount,
+    required this.isAdult,
+    required this.ageRestricted,
   });
 
   final String productId;
@@ -1181,6 +1230,8 @@ class FavoriteItem {
   final String image;
   final double? rating;
   final int? reviewsCount;
+  final bool isAdult;
+  final bool ageRestricted;
 
   Map<String, dynamic> toJson() {
     return {
@@ -1191,6 +1242,8 @@ class FavoriteItem {
       'image': image,
       'rating': rating,
       'reviewsCount': reviewsCount,
+      'isAdult': isAdult,
+      'ageRestricted': ageRestricted,
     };
   }
 
@@ -1204,6 +1257,9 @@ class FavoriteItem {
       rating: json['rating'] == null ? null : toSafeDouble(json['rating']),
       reviewsCount:
           json['reviewsCount'] == null ? null : toSafeInt(json['reviewsCount']),
+      isAdult: toSafeBool(json['isAdult'] ?? json['is_adult']),
+      ageRestricted:
+          toSafeBool(json['ageRestricted'] ?? json['age_restricted']),
     );
   }
 }
@@ -1221,6 +1277,8 @@ class CartItem {
     required this.color,
     required this.variantId,
     required this.maxQuantity,
+    required this.isAdult,
+    required this.ageRestricted,
   });
 
   final String itemId;
@@ -1234,6 +1292,10 @@ class CartItem {
   final String? color;
   final String? variantId;
   final int? maxQuantity;
+  final bool isAdult;
+  final bool ageRestricted;
+
+  bool get isAdultRestricted => isAdult || ageRestricted;
 
   double get totalPrice => price * quantity;
 
@@ -1247,6 +1309,8 @@ class CartItem {
     String? color,
     String? variantId,
     int? maxQuantity,
+    bool? isAdult,
+    bool? ageRestricted,
   }) {
     return CartItem(
       itemId: itemId,
@@ -1260,6 +1324,8 @@ class CartItem {
       color: color ?? this.color,
       variantId: variantId ?? this.variantId,
       maxQuantity: maxQuantity ?? this.maxQuantity,
+      isAdult: isAdult ?? this.isAdult,
+      ageRestricted: ageRestricted ?? this.ageRestricted,
     );
   }
 
@@ -1276,6 +1342,8 @@ class CartItem {
       'color': color,
       'variantId': variantId,
       'maxQuantity': maxQuantity,
+      'isAdult': isAdult,
+      'ageRestricted': ageRestricted,
     };
   }
 
@@ -1299,6 +1367,9 @@ class CartItem {
           : toSafeString(json['variantId']),
       maxQuantity:
           json['maxQuantity'] == null ? null : toSafeInt(json['maxQuantity']),
+      isAdult: toSafeBool(json['isAdult'] ?? json['is_adult']),
+      ageRestricted:
+          toSafeBool(json['ageRestricted'] ?? json['age_restricted']),
     );
   }
 }

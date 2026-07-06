@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kumarket/app_core/app_store.dart';
 import 'package:kumarket/app_core/models.dart';
+import 'package:kumarket/presentation/pwa_clone/adult_content_guard.dart';
 import 'package:kumarket/presentation/pwa_clone/widgets/product_card_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -40,6 +42,7 @@ class _CartScreenState extends State<CartScreen> {
     super.initState();
     _app.cart.addListener(_rebuild);
     _app.favorites.addListener(_rebuild);
+    _app.adultAgeConfirmation.addListener(_rebuild);
     _scrollController.addListener(_onScroll);
     unawaited(_loadRecommendationsInitial());
   }
@@ -48,6 +51,7 @@ class _CartScreenState extends State<CartScreen> {
   void dispose() {
     _app.cart.removeListener(_rebuild);
     _app.favorites.removeListener(_rebuild);
+    _app.adultAgeConfirmation.removeListener(_rebuild);
     _scrollController.dispose();
     super.dispose();
   }
@@ -429,7 +433,30 @@ class _CartScreenState extends State<CartScreen> {
     return ordered.take(safeLimit).toList(growable: false);
   }
 
+  Future<void> _openProduct(ProductModel product) async {
+    await guardAdultProductAction(
+      context: context,
+      app: _app,
+      product: product,
+      onAllowed: () {
+        if (!mounted) {
+          return;
+        }
+        context.push('/product/${product.routeId}');
+      },
+    );
+  }
+
   Future<void> _onAddToCart(ProductModel product) async {
+    final allowed = await ensureAdultContentAccess(
+      context: context,
+      app: _app,
+      product: product,
+    );
+    if (!allowed) {
+      return;
+    }
+
     ProductVariantModel? variant;
     for (final candidate in product.variants) {
       if (candidate.id.trim().isNotEmpty && candidate.inStock) {
@@ -624,7 +651,9 @@ class _CartScreenState extends State<CartScreen> {
                 return ProductCardWidget(
                   product: product,
                   isFavorite: _app.favorites.isFavorite(product.id),
-                  onOpen: () => context.push('/product/${product.routeId}'),
+                  isAdultRestricted: isAdultProduct(product),
+                  canShowAdultContent: canShowAdultContent(_app),
+                  onOpen: () => unawaited(_openProduct(product)),
                   onToggleFavorite: () => _app.favorites.toggleProduct(product),
                   onAddToCart: () => _onAddToCart(product),
                 );
@@ -670,6 +699,11 @@ class _CartLineTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cart = AppStore.instance.cart;
+    final canShowAdult =
+        AppStore.instance.adultAgeConfirmation.canShowAdultContent;
+    final isAdultLocked = item.isAdultRestricted && !canShowAdult;
+    final displayTitle = isAdultLocked ? 'Товар для взрослых' : item.title;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
@@ -686,17 +720,23 @@ class _CartLineTile extends StatelessWidget {
             child: SizedBox(
               width: 74,
               height: 74,
-              child: item.image.isEmpty
-                  ? Container(color: const Color(0xFFF2F2F7))
-                  : Image.network(
-                      normalizeImageUrl(item.image),
-                      fit: BoxFit.cover,
-                      filterQuality: FilterQuality.low,
-                      cacheWidth: 128,
-                      cacheHeight: 128,
-                      errorBuilder: (_, __, ___) =>
-                          Container(color: const Color(0xFFF2F2F7)),
-                    ),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(
+                  sigmaX: isAdultLocked ? 8 : 0,
+                  sigmaY: isAdultLocked ? 8 : 0,
+                ),
+                child: item.image.isEmpty
+                    ? Container(color: const Color(0xFFF2F2F7))
+                    : Image.network(
+                        normalizeImageUrl(item.image),
+                        fit: BoxFit.cover,
+                        filterQuality: FilterQuality.low,
+                        cacheWidth: 128,
+                        cacheHeight: 128,
+                        errorBuilder: (_, __, ___) =>
+                            Container(color: const Color(0xFFF2F2F7)),
+                      ),
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -705,7 +745,7 @@ class _CartLineTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.title,
+                  displayTitle,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -1113,6 +1153,42 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     context.go('/orders?created=1');
   }
 
+  Widget _buildSubmitButton(List<_PaymentMethodOption> paymentMethods) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _submitting || paymentMethods.isEmpty ? null : _createOrder,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF7B2CF5),
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: const Color(0xFFC7B8EF),
+          disabledForegroundColor: Colors.white,
+          minimumSize: const Size.fromHeight(52),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 0,
+        ),
+        child: _submitting
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  color: Colors.white,
+                ),
+              )
+            : const Text(
+                'Продолжить оформление',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final items = _app.cart.items;
@@ -1145,7 +1221,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return Container(
       color: const Color(0xFFF2F2F7),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 170),
         children: [
           const Text(
             'Оформление заказа',
@@ -1244,67 +1320,39 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             )
           else
-            GridView.builder(
-              itemCount: paymentMethods.length,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-                childAspectRatio: 1.08,
-              ),
-              itemBuilder: (context, index) {
-                final method = paymentMethods[index];
-                final isSelected = method.id == _selectedPaymentMethod;
-                return _PaymentMethodTile(
-                  method: method,
-                  selected: isSelected,
-                  disabled: _submitting,
-                  onTap: () {
-                    if (_submitting) {
-                      return;
-                    }
-                    setState(() {
-                      _selectedPaymentMethod = method.id;
-                    });
-                  },
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final tileWidth = (constraints.maxWidth - 16) / 3;
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final method in paymentMethods)
+                      SizedBox(
+                        width: tileWidth,
+                        child: AspectRatio(
+                          aspectRatio: 1.08,
+                          child: _PaymentMethodTile(
+                            method: method,
+                            selected: method.id == _selectedPaymentMethod,
+                            disabled: _submitting,
+                            onTap: () {
+                              if (_submitting) {
+                                return;
+                              }
+                              setState(() {
+                                _selectedPaymentMethod = method.id;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                  ],
                 );
               },
             ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed:
-                  _submitting || paymentMethods.isEmpty ? null : _createOrder,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF7B2CF5),
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(52),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                elevation: 0,
-              ),
-              child: _submitting
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.4,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text(
-                      'Продолжить оформление',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-            ),
-          ),
+          const SizedBox(height: 14),
+          _buildSubmitButton(paymentMethods),
         ],
       ),
     );

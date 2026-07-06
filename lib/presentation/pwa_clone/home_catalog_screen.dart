@@ -1,12 +1,155 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kumarket/app_core/app_store.dart';
 import 'package:kumarket/app_core/models.dart';
+import 'package:kumarket/presentation/pwa_clone/adult_content_guard.dart';
 import 'package:kumarket/presentation/pwa_clone/pwa_shell.dart';
 import 'package:kumarket/presentation/pwa_clone/widgets/product_card_widget.dart';
+
+bool _isEligibleForMixedFeed(ProductModel product) {
+  if (product.id.trim().isEmpty) {
+    return false;
+  }
+  if (product.price <= 0) {
+    return false;
+  }
+  if (product.stock != null && product.stock! <= 0) {
+    return false;
+  }
+  return true;
+}
+
+String _mixedFeedCategoryKeyForProduct(ProductModel product) {
+  final byId = product.categoryId.trim().toLowerCase();
+  if (byId.isNotEmpty) {
+    return byId;
+  }
+  final byName = product.categoryName.trim().toLowerCase();
+  if (byName.isNotEmpty) {
+    return byName;
+  }
+  return 'unknown';
+}
+
+List<String> _mixedFeedCategoryKeysForCategory(CategoryModel category) {
+  final keys = <String>[];
+  final byId = category.id.trim().toLowerCase();
+  if (byId.isNotEmpty) {
+    keys.add(byId);
+  }
+  final byName = category.name.trim().toLowerCase();
+  if (byName.isNotEmpty && !keys.contains(byName)) {
+    keys.add(byName);
+  }
+  return keys;
+}
+
+List<ProductModel> buildMixedProductsFeed({
+  required List<ProductModel> products,
+  required List<CategoryModel> categories,
+  int productsPerCategory = 3,
+}) {
+  if (products.isEmpty || productsPerCategory <= 0) {
+    return const <ProductModel>[];
+  }
+
+  final productsByCategory = <String, List<ProductModel>>{};
+  final seenProductIds = <String>{};
+
+  for (final product in products) {
+    if (!_isEligibleForMixedFeed(product)) {
+      continue;
+    }
+    final id = product.id.trim();
+    if (!seenProductIds.add(id)) {
+      continue;
+    }
+    final key = _mixedFeedCategoryKeyForProduct(product);
+    productsByCategory.putIfAbsent(key, () => <ProductModel>[]).add(product);
+  }
+
+  if (productsByCategory.isEmpty) {
+    return const <ProductModel>[];
+  }
+
+  final orderedCategoryKeys = <String>[];
+  for (final category in categories) {
+    final keys = _mixedFeedCategoryKeysForCategory(category);
+    for (final key in keys) {
+      if (!productsByCategory.containsKey(key) ||
+          orderedCategoryKeys.contains(key)) {
+        continue;
+      }
+      orderedCategoryKeys.add(key);
+    }
+  }
+
+  for (final key in productsByCategory.keys) {
+    if (!orderedCategoryKeys.contains(key)) {
+      orderedCategoryKeys.add(key);
+    }
+  }
+
+  final offsets = <String, int>{
+    for (final key in orderedCategoryKeys) key: 0,
+  };
+  final mixedFeed = <ProductModel>[];
+  final addedToFeedIds = <String>{};
+  var hasMoreProducts = true;
+
+  while (hasMoreProducts) {
+    hasMoreProducts = false;
+
+    for (final key in orderedCategoryKeys) {
+      final items = productsByCategory[key];
+      if (items == null || items.isEmpty) {
+        continue;
+      }
+      final currentOffset = offsets[key] ?? 0;
+      if (currentOffset >= items.length) {
+        continue;
+      }
+
+      final end = min(currentOffset + productsPerCategory, items.length);
+      final nextProducts = items.sublist(currentOffset, end);
+      offsets[key] = end;
+
+      for (final product in nextProducts) {
+        final id = product.id.trim();
+        if (id.isEmpty || !addedToFeedIds.add(id)) {
+          continue;
+        }
+        mixedFeed.add(product);
+      }
+
+      if ((offsets[key] ?? 0) < items.length) {
+        hasMoreProducts = true;
+      }
+    }
+  }
+
+  return mixedFeed;
+}
+
+List<ProductModel> getPaginatedProducts({
+  required List<ProductModel> mixedFeed,
+  required int page,
+  int pageSize = 20,
+}) {
+  if (page < 0 || pageSize <= 0 || mixedFeed.isEmpty) {
+    return const <ProductModel>[];
+  }
+  final start = page * pageSize;
+  if (start >= mixedFeed.length) {
+    return const <ProductModel>[];
+  }
+  final end = min(start + pageSize, mixedFeed.length);
+  return mixedFeed.sublist(start, end);
+}
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -90,8 +233,10 @@ class _ProductsFeedCache {
 }
 
 class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
+  static const String _feedCacheVersion = 'mixed-v3';
   static const int _allCategoryPerCategoryBatch = 3;
-  static const int _productsChunkSize = 10;
+  static const int _initialAllModeCategoryCount = 4;
+  static const int _productsChunkSize = 20;
   static const int _categoryIconPrefetchCount = 14;
   static const int _backgroundPrefetchMaxPages = 300;
   static const int _backgroundPrefetchFlushSize = 40;
@@ -130,12 +275,13 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
   bool _orderedGridCacheShowHero = false;
   List<ProductModel> _orderedGridCache = const <ProductModel>[];
 
-  String get _cacheKey => widget.redirectPath;
+  String get _cacheKey => '${widget.redirectPath}::$_feedCacheVersion';
+  String get _routeInitialCategoryId => (widget.initialCategoryId ?? '').trim();
 
   @override
   void initState() {
     super.initState();
-    _selectedCategoryId = widget.initialCategoryId ?? '';
+    _selectedCategoryId = _routeInitialCategoryId;
     _lastSearchValue = _searchController.text.trim();
     final restored = _restoreFromCache();
     _loadInitial(preserveExisting: restored);
@@ -143,6 +289,7 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
     _searchController.addListener(_onSearchChanged);
     _app.favorites.addListener(_rebuild);
     _app.cart.addListener(_rebuild);
+    _app.adultAgeConfirmation.addListener(_rebuild);
     pwaTabReselectNotifier.addListener(_handleTabReselect);
     _startHeroRotation();
   }
@@ -157,6 +304,7 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
     _heroController.dispose();
     _app.favorites.removeListener(_rebuild);
     _app.cart.removeListener(_rebuild);
+    _app.adultAgeConfirmation.removeListener(_rebuild);
     pwaTabReselectNotifier.removeListener(_handleTabReselect);
     super.dispose();
   }
@@ -209,72 +357,6 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
 
   bool get _isAllCategoryMode {
     return _selectedCategoryId.isEmpty && _searchController.text.trim().isEmpty;
-  }
-
-  String _productStableKey(ProductModel product) {
-    final id = product.id.trim();
-    if (id.isNotEmpty) {
-      return id;
-    }
-    final routeId = product.routeId.trim();
-    if (routeId.isNotEmpty) {
-      return routeId;
-    }
-    return '${product.title.trim()}::${product.catalogImage.trim()}';
-  }
-
-  int _stableHash(String value) {
-    var hash = 0;
-    for (final codeUnit in value.codeUnits) {
-      hash = (hash * 31 + codeUnit) & 0x3fffffff;
-    }
-    return hash;
-  }
-
-  List<ProductModel> _stableFeedOrder(Iterable<ProductModel> source) {
-    final products = source.toList(growable: false);
-    products.sort((a, b) {
-      final aKey = _productStableKey(a);
-      final bKey = _productStableKey(b);
-      final hashCompare = _stableHash(aKey).compareTo(_stableHash(bKey));
-      if (hashCompare != 0) {
-        return hashCompare;
-      }
-      return aKey.compareTo(bKey);
-    });
-    return products;
-  }
-
-  List<ProductModel> _mergeProductsKeepingCurrentOrder(
-    List<ProductModel> current,
-    List<ProductModel> incoming,
-  ) {
-    final incomingByKey = <String, ProductModel>{
-      for (final product in incoming) _productStableKey(product): product,
-    };
-    final merged = <ProductModel>[];
-    final seen = <String>{};
-
-    for (final product in current) {
-      final key = _productStableKey(product);
-      final updated = incomingByKey.remove(key);
-      if (updated != null) {
-        merged.add(updated);
-        seen.add(key);
-      } else if (seen.add(key)) {
-        merged.add(product);
-      }
-    }
-
-    for (final product in incoming) {
-      final key = _productStableKey(product);
-      final added = incomingByKey.remove(key);
-      if (added != null && seen.add(key)) {
-        merged.add(added);
-      }
-    }
-
-    return merged;
   }
 
   void _startHeroRotation() {
@@ -423,6 +505,89 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
     }
   }
 
+  Future<void> _loadRemainingAllModeInitialPages({
+    required int session,
+    required int requestVersion,
+    required String categoryIdSnapshot,
+    required List<CategoryModel> categories,
+  }) async {
+    if (categories.isEmpty) {
+      if (session == _backgroundPrefetchSession) {
+        _backgroundPrefetching = false;
+      }
+      return;
+    }
+
+    bool isStale() {
+      return !mounted ||
+          session != _backgroundPrefetchSession ||
+          requestVersion != _catalogRequestVersion ||
+          categoryIdSnapshot != _selectedCategoryId ||
+          !_isAllCategoryMode;
+    }
+
+    try {
+      final pages = await Future.wait<PaginatedProducts>(
+        categories.map((category) {
+          return _fetchProductsWithRetry(
+            page: 1,
+            categoryId: category.id,
+            attempts: 2,
+          ).catchError(
+            (_) => const PaginatedProducts(
+              results: <ProductModel>[],
+              nextPage: null,
+              hasMore: false,
+            ),
+          );
+        }),
+      );
+
+      if (isStale()) {
+        return;
+      }
+
+      final merged = <String, ProductModel>{};
+      for (final product in _products) {
+        merged[product.id] = product;
+      }
+
+      final nextPages = Map<String, int?>.from(_allModeNextPagesByCategory);
+      final hasMoreByCategory =
+          Map<String, bool>.from(_allModeHasMoreByCategory);
+
+      for (int i = 0; i < categories.length; i += 1) {
+        final category = categories[i];
+        final page = pages[i];
+        nextPages[category.id] = page.nextPage;
+        hasMoreByCategory[category.id] = page.hasMore;
+        for (final product in page.results) {
+          merged[product.id] = product;
+        }
+      }
+
+      final hasAnyMore = hasMoreByCategory.values.any((value) => value);
+      setState(() {
+        _products = merged.values.toList(growable: false);
+        _nextPage = null;
+        _hasMore = hasAnyMore;
+        _allModeNextPagesByCategory
+          ..clear()
+          ..addAll(nextPages);
+        _allModeHasMoreByCategory
+          ..clear()
+          ..addAll(hasMoreByCategory);
+        _allModeGeneralNextPage = null;
+        _allModeGeneralHasMore = false;
+      });
+      _saveToCache();
+    } finally {
+      if (session == _backgroundPrefetchSession) {
+        _backgroundPrefetching = false;
+      }
+    }
+  }
+
   void _precacheCategoryIcons(List<CategoryModel> categories) {
     if (!mounted || categories.isEmpty) {
       return;
@@ -449,9 +614,19 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
     if (cache == null) {
       return false;
     }
+    final cachedSelectedCategoryId = cache.selectedCategoryId.trim();
+    final routeSelectedCategoryId = _routeInitialCategoryId;
+    if (routeSelectedCategoryId.isEmpty &&
+        cachedSelectedCategoryId.isNotEmpty) {
+      return false;
+    }
+    if (routeSelectedCategoryId.isNotEmpty &&
+        cachedSelectedCategoryId != routeSelectedCategoryId) {
+      return false;
+    }
     _products = cache.products;
     _categories = cache.categories;
-    _selectedCategoryId = cache.selectedCategoryId;
+    _selectedCategoryId = routeSelectedCategoryId;
     _hasMore = cache.hasMore;
     _nextPage = cache.nextPage;
     _visibleProductsLimit = cache.visibleProductsLimit;
@@ -474,7 +649,8 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
     _cache[_cacheKey] = _ProductsFeedCache(
       products: _products,
       categories: _categories,
-      selectedCategoryId: _selectedCategoryId,
+      selectedCategoryId:
+          _routeInitialCategoryId.isEmpty ? '' : _selectedCategoryId,
       hasMore: _hasMore,
       nextPage: _nextPage,
       visibleProductsLimit: _visibleProductsLimit,
@@ -527,36 +703,106 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
       });
       _precacheCategoryIcons(categories);
       if (allModeSnapshot) {
-        // Keep "Все" in sync with PWA: only global products feed + pagination.
-        final firstPage = await _fetchProductsWithRetry(page: 1);
+        final allModeCategories = categories
+            .where((category) => category.id.trim().isNotEmpty)
+            .toList(growable: false);
 
-        if (!mounted) {
-          return;
+        if (allModeCategories.isEmpty) {
+          final firstPage = await _fetchProductsWithRetry(page: 1);
+
+          if (!mounted) {
+            return;
+          }
+          if (requestVersion != _catalogRequestVersion ||
+              categoryIdSnapshot != _selectedCategoryId) {
+            return;
+          }
+
+          setState(() {
+            _products = <ProductModel>[...firstPage.results];
+            _nextPage = firstPage.nextPage;
+            _hasMore = firstPage.hasMore;
+            _allModeNextPagesByCategory.clear();
+            _allModeHasMoreByCategory.clear();
+            _allModeGeneralNextPage = firstPage.nextPage;
+            _allModeGeneralHasMore = firstPage.hasMore;
+          });
+          _saveToCache();
+        } else {
+          final initialCategories = allModeCategories
+              .take(_initialAllModeCategoryCount)
+              .toList(growable: false);
+          final remainingCategories = allModeCategories
+              .skip(_initialAllModeCategoryCount)
+              .toList(growable: false);
+
+          final firstPages = await Future.wait<PaginatedProducts>(
+            initialCategories.map((category) {
+              return _fetchProductsWithRetry(
+                page: 1,
+                categoryId: category.id,
+                attempts: 2,
+              ).catchError(
+                (_) => const PaginatedProducts(
+                  results: <ProductModel>[],
+                  nextPage: null,
+                  hasMore: false,
+                ),
+              );
+            }),
+          );
+
+          if (!mounted) {
+            return;
+          }
+          if (requestVersion != _catalogRequestVersion ||
+              categoryIdSnapshot != _selectedCategoryId) {
+            return;
+          }
+
+          final merged = <String, ProductModel>{};
+          final nextPages = <String, int?>{};
+          final hasMoreByCategory = <String, bool>{};
+
+          for (int i = 0; i < initialCategories.length; i += 1) {
+            final category = initialCategories[i];
+            final page = firstPages[i];
+            nextPages[category.id] = page.nextPage;
+            hasMoreByCategory[category.id] = page.hasMore;
+            for (final product in page.results) {
+              merged[product.id] = product;
+            }
+          }
+
+          final hasAnyMore = hasMoreByCategory.values.any((value) => value);
+          final shouldPrefetchRemaining = remainingCategories.isNotEmpty;
+          setState(() {
+            _products = merged.values.toList(growable: false);
+            _nextPage = null;
+            _hasMore = hasAnyMore || shouldPrefetchRemaining;
+            _allModeNextPagesByCategory
+              ..clear()
+              ..addAll(nextPages);
+            _allModeHasMoreByCategory
+              ..clear()
+              ..addAll(hasMoreByCategory);
+            _allModeGeneralNextPage = null;
+            _allModeGeneralHasMore = false;
+          });
+          _saveToCache();
+          if (shouldPrefetchRemaining) {
+            final session = ++_backgroundPrefetchSession;
+            _backgroundPrefetching = true;
+            unawaited(
+              _loadRemainingAllModeInitialPages(
+                session: session,
+                requestVersion: requestVersion,
+                categoryIdSnapshot: categoryIdSnapshot,
+                categories: remainingCategories,
+              ),
+            );
+          }
         }
-        if (requestVersion != _catalogRequestVersion ||
-            categoryIdSnapshot != _selectedCategoryId) {
-          return;
-        }
-
-        final products = _stableFeedOrder(firstPage.results);
-        final nextProducts = preserveExisting
-            ? _mergeProductsKeepingCurrentOrder(_products, products)
-            : products;
-
-        setState(() {
-          _products = nextProducts;
-          _nextPage = firstPage.nextPage;
-          _hasMore = firstPage.hasMore;
-          _allModeNextPagesByCategory.clear();
-          _allModeHasMoreByCategory.clear();
-          _allModeGeneralNextPage = firstPage.nextPage;
-          _allModeGeneralHasMore = firstPage.hasMore;
-        });
-        _saveToCache();
-        _scheduleBackgroundPrefetch(
-          requestVersion: requestVersion,
-          categoryIdSnapshot: categoryIdSnapshot,
-        );
       } else {
         final firstPage = await _fetchProductsWithRetry(
           page: 1,
@@ -571,13 +817,10 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
           return;
         }
 
-        final products = _stableFeedOrder(firstPage.results);
-        final nextProducts = preserveExisting
-            ? _mergeProductsKeepingCurrentOrder(_products, products)
-            : products;
+        final products = <ProductModel>[...firstPage.results];
 
         setState(() {
-          _products = nextProducts;
+          _products = products;
           _nextPage = firstPage.nextPage;
           _hasMore = firstPage.hasMore;
         });
@@ -621,7 +864,7 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
     if (_loading || _loadingMore || _backgroundPrefetching || !_hasMore) {
       return;
     }
-    if (_nextPage == null) {
+    if (!_isAllCategoryMode && _nextPage == null) {
       return;
     }
 
@@ -632,38 +875,111 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
       _loadingMore = true;
     });
     try {
-      final page = await _fetchProductsWithRetry(
-        page: _nextPage!,
-        categoryId: categoryIdSnapshot.isEmpty ? null : categoryIdSnapshot,
-      );
-      final merged = <String, ProductModel>{};
-      for (final item in _products) {
-        merged[item.id] = item;
-      }
-      for (final item in page.results) {
-        merged[item.id] = item;
-      }
-      if (!mounted) {
-        return;
-      }
-      if (requestVersion != _catalogRequestVersion ||
-          categoryIdSnapshot != _selectedCategoryId) {
-        return;
-      }
-      setState(() {
-        _products = merged.values.toList(growable: false);
-        _nextPage = page.nextPage;
-        _hasMore = page.hasMore;
-        if (_isAllCategoryMode) {
-          _allModeGeneralNextPage = page.nextPage;
-          _allModeGeneralHasMore = page.hasMore;
+      if (_isAllCategoryMode) {
+        final categoriesToFetch = _categories
+            .where((category) => category.id.trim().isNotEmpty)
+            .where((category) {
+          final id = category.id;
+          return (_allModeHasMoreByCategory[id] ?? false) &&
+              _allModeNextPagesByCategory[id] != null;
+        }).toList(growable: false);
+
+        if (categoriesToFetch.isEmpty) {
+          setState(() {
+            _hasMore = false;
+          });
+          return;
         }
-      });
-      _saveToCache();
-      _scheduleBackgroundPrefetch(
-        requestVersion: requestVersion,
-        categoryIdSnapshot: categoryIdSnapshot,
-      );
+
+        final pages = await Future.wait<PaginatedProducts>(
+          categoriesToFetch.map((category) {
+            final pageNumber = _allModeNextPagesByCategory[category.id]!;
+            return _fetchProductsWithRetry(
+              page: pageNumber,
+              categoryId: category.id,
+              attempts: 2,
+            ).catchError(
+              (_) => const PaginatedProducts(
+                results: <ProductModel>[],
+                nextPage: null,
+                hasMore: false,
+              ),
+            );
+          }),
+        );
+
+        if (!mounted) {
+          return;
+        }
+        if (requestVersion != _catalogRequestVersion ||
+            categoryIdSnapshot != _selectedCategoryId) {
+          return;
+        }
+
+        final merged = <String, ProductModel>{};
+        for (final item in _products) {
+          merged[item.id] = item;
+        }
+
+        final nextPages = Map<String, int?>.from(_allModeNextPagesByCategory);
+        final hasMoreByCategory =
+            Map<String, bool>.from(_allModeHasMoreByCategory);
+
+        for (int i = 0; i < categoriesToFetch.length; i += 1) {
+          final category = categoriesToFetch[i];
+          final page = pages[i];
+          nextPages[category.id] = page.nextPage;
+          hasMoreByCategory[category.id] = page.hasMore;
+          for (final product in page.results) {
+            merged[product.id] = product;
+          }
+        }
+
+        final hasAnyMore = hasMoreByCategory.values.any((value) => value);
+        setState(() {
+          _products = merged.values.toList(growable: false);
+          _nextPage = null;
+          _hasMore = hasAnyMore;
+          _allModeNextPagesByCategory
+            ..clear()
+            ..addAll(nextPages);
+          _allModeHasMoreByCategory
+            ..clear()
+            ..addAll(hasMoreByCategory);
+          _allModeGeneralNextPage = null;
+          _allModeGeneralHasMore = false;
+        });
+        _saveToCache();
+      } else {
+        final page = await _fetchProductsWithRetry(
+          page: _nextPage!,
+          categoryId: categoryIdSnapshot.isEmpty ? null : categoryIdSnapshot,
+        );
+        final merged = <String, ProductModel>{};
+        for (final item in _products) {
+          merged[item.id] = item;
+        }
+        for (final item in page.results) {
+          merged[item.id] = item;
+        }
+        if (!mounted) {
+          return;
+        }
+        if (requestVersion != _catalogRequestVersion ||
+            categoryIdSnapshot != _selectedCategoryId) {
+          return;
+        }
+        setState(() {
+          _products = merged.values.toList(growable: false);
+          _nextPage = page.nextPage;
+          _hasMore = page.hasMore;
+        });
+        _saveToCache();
+        _scheduleBackgroundPrefetch(
+          requestVersion: requestVersion,
+          categoryIdSnapshot: categoryIdSnapshot,
+        );
+      }
     } catch (_) {
       if (!mounted) {
         return;
@@ -673,7 +989,9 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
         return;
       }
       setState(() {
-        _hasMore = _nextPage != null;
+        _hasMore = _isAllCategoryMode
+            ? _allModeHasMoreByCategory.values.any((value) => value)
+            : _nextPage != null;
       });
     } finally {
       if (mounted &&
@@ -707,133 +1025,30 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
   }
 
   List<ProductModel> get _heroProducts {
-    return _products.take(5).toList(growable: false);
+    return _products
+        .where(_isEligibleForMixedFeed)
+        .take(5)
+        .toList(growable: false);
   }
 
   List<ProductModel> get _filteredProducts {
     final query = _searchController.text.trim().toLowerCase();
+    final eligible = _products.where(_isEligibleForMixedFeed);
     if (query.isEmpty) {
-      return _products;
+      return eligible.toList(growable: false);
     }
-    return _products.where((product) {
+    return eligible.where((product) {
       return product.title.toLowerCase().contains(query) ||
           product.categoryName.toLowerCase().contains(query);
     }).toList(growable: false);
   }
 
-  String _normalizeCategoryKey(String value) {
-    return value.trim().toLowerCase();
-  }
-
-  String _categoryKeyFromProduct(ProductModel product) {
-    final byName = _normalizeCategoryKey(product.categoryName);
-    if (byName.isNotEmpty) {
-      return byName;
-    }
-    final byId = _normalizeCategoryKey(product.categoryId);
-    if (byId.isNotEmpty) {
-      return byId;
-    }
-    return 'unknown';
-  }
-
-  String _categoryKeyFromCategory(CategoryModel category) {
-    final byName = _normalizeCategoryKey(category.name);
-    if (byName.isNotEmpty) {
-      return byName;
-    }
-    final byId = _normalizeCategoryKey(category.id);
-    if (byId.isNotEmpty) {
-      return byId;
-    }
-    return '';
-  }
-
   List<ProductModel> _mixAllCategoryProducts(List<ProductModel> source) {
-    if (source.length <= 1) {
-      return source;
-    }
-
-    final grouped = <String, List<ProductModel>>{};
-    for (final product in source) {
-      final key = _categoryKeyFromProduct(product);
-      grouped.putIfAbsent(key, () => <ProductModel>[]).add(product);
-    }
-    if (grouped.length <= 1) {
-      return source;
-    }
-
-    final orderedKeys = <String>[];
-    for (final category in _categories) {
-      final key = _categoryKeyFromCategory(category);
-      if (key.isNotEmpty &&
-          grouped.containsKey(key) &&
-          !orderedKeys.contains(key)) {
-        orderedKeys.add(key);
-      }
-    }
-    for (final product in source) {
-      final key = _categoryKeyFromProduct(product);
-      if (!orderedKeys.contains(key)) {
-        orderedKeys.add(key);
-      }
-    }
-
-    final offsets = <String, int>{
-      for (final key in orderedKeys) key: 0,
-    };
-    final mixed = <ProductModel>[];
-
-    bool added = true;
-    while (added) {
-      added = false;
-      for (final key in orderedKeys) {
-        final items = grouped[key];
-        if (items == null || items.isEmpty) {
-          continue;
-        }
-        final start = offsets[key] ?? 0;
-        if (start >= items.length) {
-          continue;
-        }
-        final end = min(start + _allCategoryPerCategoryBatch, items.length);
-        mixed.addAll(items.sublist(start, end));
-        offsets[key] = end;
-        added = true;
-      }
-    }
-
-    return mixed;
-  }
-
-  List<ProductModel> _keepVisibleGridOrder(List<ProductModel> ordered) {
-    if (_orderedGridCache.isEmpty) {
-      return ordered;
-    }
-
-    final remaining = <String, ProductModel>{
-      for (final product in ordered) _productStableKey(product): product,
-    };
-    final stable = <ProductModel>[];
-    final seen = <String>{};
-
-    for (final previous in _orderedGridCache) {
-      final key = _productStableKey(previous);
-      final current = remaining.remove(key);
-      if (current != null && seen.add(key)) {
-        stable.add(current);
-      }
-    }
-
-    for (final product in ordered) {
-      final key = _productStableKey(product);
-      final current = remaining.remove(key);
-      if (current != null && seen.add(key)) {
-        stable.add(current);
-      }
-    }
-
-    return stable;
+    return buildMixedProductsFeed(
+      products: source,
+      categories: _categories,
+      productsPerCategory: _allCategoryPerCategoryBatch,
+    );
   }
 
   List<ProductModel> get _orderedProductsForGrid {
@@ -847,9 +1062,12 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
       return _orderedGridCache;
     }
 
+    final eligibleProducts =
+        _products.where(_isEligibleForMixedFeed).toList(growable: false);
+
     final filtered = query.isEmpty
-        ? _products
-        : _products.where((product) {
+        ? eligibleProducts
+        : eligibleProducts.where((product) {
             return product.title.toLowerCase().contains(query) ||
                 product.categoryName.toLowerCase().contains(query);
           }).toList(growable: false);
@@ -864,12 +1082,7 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
                 .toList(growable: false);
           }();
 
-    final nextOrder = _isAllCategoryMode ? _mixAllCategoryProducts(base) : base;
-    final canKeepVisibleOrder = _orderedGridCacheQuery == query &&
-        _orderedGridCacheSelectedCategoryId == _selectedCategoryId &&
-        _orderedGridCacheShowHero == widget.showHero;
-    final ordered =
-        canKeepVisibleOrder ? _keepVisibleGridOrder(nextOrder) : nextOrder;
+    final ordered = _isAllCategoryMode ? _mixAllCategoryProducts(base) : base;
     _orderedGridCacheProductsRef = _products;
     _orderedGridCacheCategoriesRef = _categories;
     _orderedGridCacheQuery = query;
@@ -888,7 +1101,20 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
       _productsChunkSize,
       min(_visibleProductsLimit, ordered.length),
     );
-    return ordered.take(safeLimit).toList(growable: false);
+    final visiblePageCount = (safeLimit / _productsChunkSize).ceil();
+    final visible = <ProductModel>[];
+    for (int page = 0; page < visiblePageCount; page += 1) {
+      final chunk = getPaginatedProducts(
+        mixedFeed: ordered,
+        page: page,
+        pageSize: _productsChunkSize,
+      );
+      if (chunk.isEmpty) {
+        break;
+      }
+      visible.addAll(chunk);
+    }
+    return visible;
   }
 
   ProductModel _favoriteToProduct(FavoriteItem item) {
@@ -918,10 +1144,35 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
       categoryName: '',
       stock: null,
       variants: const <ProductVariantModel>[],
+      isAdult: item.isAdult,
+      ageRestricted: item.ageRestricted,
+    );
+  }
+
+  Future<void> _openProduct(ProductModel product) async {
+    await guardAdultProductAction(
+      context: context,
+      app: _app,
+      product: product,
+      onAllowed: () {
+        if (!mounted) {
+          return;
+        }
+        context.push('/product/${product.routeId}');
+      },
     );
   }
 
   Future<void> _onAddToCart(ProductModel product) async {
+    final allowed = await ensureAdultContentAccess(
+      context: context,
+      app: _app,
+      product: product,
+    );
+    if (!allowed) {
+      return;
+    }
+
     ProductVariantModel? variant;
     for (final candidate in product.variants) {
       if (candidate.id.trim().isNotEmpty && candidate.inStock) {
@@ -983,8 +1234,7 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
         onRefresh: () => _loadInitial(preserveExisting: true),
         child: ListView(
           controller: _scrollController,
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 132),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
           children: [
             _SearchHeader(
               controller: _searchController,
@@ -997,6 +1247,8 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
                 currentIndex: _heroIndex,
                 controller: _heroController,
                 onPageChanged: (value) => setState(() => _heroIndex = value),
+                canShowAdultContent: canShowAdultContent(_app),
+                onOpenProduct: _openProduct,
               ),
             ],
             const SizedBox(height: 16),
@@ -1014,7 +1266,7 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
                   _selectedCategoryId = categoryId;
                   _visibleProductsLimit = _productsChunkSize;
                 });
-                _loadInitial();
+                _loadInitial(preserveExisting: _products.isNotEmpty);
               },
             ),
             if (widget.showFavorites && !isSearchActive) ...[
@@ -1059,12 +1311,11 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
                     final item = favorites[index];
                     final product = _favoriteToProduct(item);
                     return ProductCardWidget(
-                      key: ValueKey<String>(
-                        'favorite-${_productStableKey(product)}',
-                      ),
                       product: product,
                       isFavorite: true,
-                      onOpen: () => context.push('/product/${product.routeId}'),
+                      isAdultRestricted: isAdultProduct(product),
+                      canShowAdultContent: canShowAdultContent(_app),
+                      onOpen: () => unawaited(_openProduct(product)),
                       onToggleFavorite: () => _app.favorites.toggleStored(item),
                       onAddToCart: () => _onAddToCart(product),
                     );
@@ -1125,12 +1376,11 @@ class _ProductsFeedScreenState extends State<ProductsFeedScreen> {
                 itemBuilder: (context, index) {
                   final product = visibleGridProducts[index];
                   return ProductCardWidget(
-                    key: ValueKey<String>(
-                      'home-${_productStableKey(product)}',
-                    ),
                     product: product,
                     isFavorite: _app.favorites.isFavorite(product.id),
-                    onOpen: () => context.push('/product/${product.routeId}'),
+                    isAdultRestricted: isAdultProduct(product),
+                    canShowAdultContent: canShowAdultContent(_app),
+                    onOpen: () => unawaited(_openProduct(product)),
                     onToggleFavorite: () =>
                         _app.favorites.toggleProduct(product),
                     onAddToCart: () => _onAddToCart(product),
@@ -1248,12 +1498,16 @@ class _HeroSlider extends StatelessWidget {
     required this.currentIndex,
     required this.controller,
     required this.onPageChanged,
+    required this.canShowAdultContent,
+    required this.onOpenProduct,
   });
 
   final List<ProductModel> products;
   final int currentIndex;
   final PageController controller;
   final ValueChanged<int> onPageChanged;
+  final bool canShowAdultContent;
+  final Future<void> Function(ProductModel product) onOpenProduct;
 
   @override
   Widget build(BuildContext context) {
@@ -1289,33 +1543,65 @@ class _HeroSlider extends StatelessWidget {
             onPageChanged: onPageChanged,
             itemBuilder: (context, index) {
               final product = products[index];
+              final isAdultLocked =
+                  isAdultProduct(product) && !canShowAdultContent;
               return GestureDetector(
-                key: ValueKey<String>('hero-${product.id}'),
-                onTap: () => context.push('/product/${product.routeId}'),
+                onTap: () => unawaited(onOpenProduct(product)),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(24),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      if (product.detailImage.isNotEmpty)
-                        Image.network(
-                          product.detailImage,
-                          fit: BoxFit.cover,
-                          filterQuality: FilterQuality.low,
-                          cacheWidth: 960,
-                          cacheHeight: 540,
-                          frameBuilder: (context, child, frame, wasSyncLoaded) {
-                            if (wasSyncLoaded || frame != null) {
-                              return child;
-                            }
-                            return Container(color: const Color(0xFF8F56F7));
-                          },
-                          errorBuilder: (_, __, ___) => Container(
-                            color: const Color(0xFF8F56F7),
+                      ImageFiltered(
+                        imageFilter: ImageFilter.blur(
+                          sigmaX: isAdultLocked ? 8 : 0,
+                          sigmaY: isAdultLocked ? 8 : 0,
+                        ),
+                        child: product.detailImage.isNotEmpty
+                            ? Image.network(
+                                product.detailImage,
+                                fit: BoxFit.cover,
+                                filterQuality: FilterQuality.low,
+                                cacheWidth: 960,
+                                cacheHeight: 540,
+                                frameBuilder:
+                                    (context, child, frame, wasSyncLoaded) {
+                                  if (wasSyncLoaded || frame != null) {
+                                    return child;
+                                  }
+                                  return Container(
+                                      color: const Color(0xFF8F56F7));
+                                },
+                                errorBuilder: (_, __, ___) => Container(
+                                  color: const Color(0xFF8F56F7),
+                                ),
+                              )
+                            : Container(color: const Color(0xFF8F56F7)),
+                      ),
+                      if (isAdultLocked)
+                        Container(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.58),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Text(
+                                'Товары для взрослых',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
                           ),
-                        )
-                      else
-                        Container(color: const Color(0xFF8F56F7)),
+                        ),
                       Container(
                         decoration: const BoxDecoration(
                           gradient: LinearGradient(
@@ -1358,7 +1644,9 @@ class _HeroSlider extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              product.title,
+                              isAdultLocked
+                                  ? 'Товар для взрослых'
+                                  : product.title,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -1428,7 +1716,7 @@ class _CategoriesStrip extends StatelessWidget {
       return SizedBox(
         height: 128,
         child: ListView.separated(
-          physics: const ClampingScrollPhysics(),
+          physics: const BouncingScrollPhysics(),
           scrollDirection: Axis.horizontal,
           itemBuilder: (context, index) {
             return Container(
@@ -1449,7 +1737,7 @@ class _CategoriesStrip extends StatelessWidget {
     return SizedBox(
       height: 128,
       child: ListView.builder(
-        physics: const ClampingScrollPhysics(),
+        physics: const BouncingScrollPhysics(),
         scrollDirection: Axis.horizontal,
         itemCount: categories.length + 1,
         itemBuilder: (context, index) {

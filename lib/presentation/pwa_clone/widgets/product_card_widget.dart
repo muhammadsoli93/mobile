@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:kumarket/app_core/models.dart';
 
@@ -9,6 +11,8 @@ class ProductCardWidget extends StatelessWidget {
     required this.onOpen,
     required this.onToggleFavorite,
     required this.onAddToCart,
+    required this.isAdultRestricted,
+    required this.canShowAdultContent,
   });
 
   final ProductModel product;
@@ -16,12 +20,15 @@ class ProductCardWidget extends StatelessWidget {
   final VoidCallback onOpen;
   final VoidCallback onToggleFavorite;
   final VoidCallback onAddToCart;
+  final bool isAdultRestricted;
+  final bool canShowAdultContent;
 
   @override
   Widget build(BuildContext context) {
     final stars = product.rating.round().clamp(0, 5);
     final catalogImage = product.catalogImage;
     final imageKey = ValueKey<String>('${product.id}::$catalogImage');
+    final isAdultLocked = isAdultRestricted && !canShowAdultContent;
 
     Widget buildImagePlaceholder() {
       return Container(
@@ -45,8 +52,8 @@ class ProductCardWidget extends StatelessWidget {
             boxShadow: const [
               BoxShadow(
                 color: Color(0x12000000),
-                blurRadius: 8,
-                offset: Offset(0, 2),
+                blurRadius: 10,
+                offset: Offset(0, 3),
               ),
             ],
           ),
@@ -58,29 +65,66 @@ class ProductCardWidget extends StatelessWidget {
                     Positioned.fill(
                       child: ClipRRect(
                         borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(20),
+                            top: Radius.circular(20)),
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(
+                            sigmaX: isAdultLocked ? 8 : 0,
+                            sigmaY: isAdultLocked ? 8 : 0,
+                          ),
+                          child: catalogImage.isEmpty
+                              ? buildImagePlaceholder()
+                              : Image.network(
+                                  key: imageKey,
+                                  catalogImage,
+                                  fit: BoxFit.cover,
+                                  filterQuality: FilterQuality.low,
+                                  cacheWidth: 320,
+                                  cacheHeight: 320,
+                                  frameBuilder:
+                                      (context, child, frame, wasSyncLoaded) {
+                                    if (wasSyncLoaded || frame != null) {
+                                      return child;
+                                    }
+                                    return buildImagePlaceholder();
+                                  },
+                                  errorBuilder: (_, __, ___) =>
+                                      buildImagePlaceholder(),
+                                ),
                         ),
-                        child: catalogImage.isEmpty
-                            ? buildImagePlaceholder()
-                            : Image.network(
-                                key: imageKey,
-                                catalogImage,
-                                fit: BoxFit.cover,
-                                filterQuality: FilterQuality.low,
-                                cacheWidth: 320,
-                                cacheHeight: 320,
-                                frameBuilder:
-                                    (context, child, frame, wasSyncLoaded) {
-                                  if (wasSyncLoaded || frame != null) {
-                                    return child;
-                                  }
-                                  return buildImagePlaceholder();
-                                },
-                                errorBuilder: (_, __, ___) =>
-                                    buildImagePlaceholder(),
-                              ),
                       ),
                     ),
+                    if (isAdultLocked)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(20),
+                            ),
+                            color: Colors.black.withValues(alpha: 0.28),
+                          ),
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.58),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Text(
+                                'Товары для взрослых',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     Positioned(
                       top: 8,
                       right: 8,
@@ -114,7 +158,7 @@ class ProductCardWidget extends StatelessWidget {
                 child: Column(
                   children: [
                     Text(
-                      product.title,
+                      isAdultLocked ? 'Товар для взрослых' : product.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
@@ -184,7 +228,9 @@ class ProductCardWidget extends StatelessWidget {
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        child: const Text('В корзину'),
+                        child: Text(
+                          isAdultLocked ? 'Подтвердить 18+' : 'В корзину',
+                        ),
                       ),
                     ),
                   ],

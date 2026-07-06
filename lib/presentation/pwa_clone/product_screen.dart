@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kumarket/app_core/app_store.dart';
 import 'package:kumarket/app_core/models.dart';
+import 'package:kumarket/presentation/pwa_clone/adult_content_guard.dart';
 import 'package:kumarket/presentation/pwa_clone/widgets/product_card_widget.dart';
 
 class ProductScreen extends StatefulWidget {
@@ -117,6 +119,7 @@ class _ProductScreenState extends State<ProductScreen> {
     _scrollController.addListener(_onScroll);
     _app.cart.addListener(_rebuild);
     _app.favorites.addListener(_rebuild);
+    _app.adultAgeConfirmation.addListener(_rebuild);
   }
 
   @override
@@ -124,6 +127,7 @@ class _ProductScreenState extends State<ProductScreen> {
     _scrollController.dispose();
     _app.cart.removeListener(_rebuild);
     _app.favorites.removeListener(_rebuild);
+    _app.adultAgeConfirmation.removeListener(_rebuild);
     super.dispose();
   }
 
@@ -175,11 +179,6 @@ class _ProductScreenState extends State<ProductScreen> {
         return;
       }
 
-      final related = await _app.api.fetchRelatedProducts(product: product);
-      if (!mounted) {
-        return;
-      }
-
       final colorOptions = product.variants
           .map((variant) => variant.color.trim())
           .where((value) => value.isNotEmpty)
@@ -193,10 +192,11 @@ class _ProductScreenState extends State<ProductScreen> {
 
       setState(() {
         _product = product;
-        _related = related;
         _selectedColor = colorOptions.isNotEmpty ? colorOptions.first : '';
         _selectedSize = sizeOptions.isNotEmpty ? sizeOptions.first : '';
+        _loading = false;
       });
+      unawaited(_loadRelatedProducts(product));
     } catch (_) {
       if (!mounted) {
         return;
@@ -211,6 +211,43 @@ class _ProductScreenState extends State<ProductScreen> {
         });
       }
     }
+  }
+
+  Future<void> _loadRelatedProducts(ProductModel product) async {
+    try {
+      final related = await _app.api.fetchRelatedProducts(product: product);
+      if (!mounted || _product?.id != product.id) {
+        return;
+      }
+      setState(() {
+        _related = related;
+        _visibleRelatedLimit = _relatedChunkSize;
+      });
+    } catch (_) {
+      // Related products are optional; the product page should stay fast.
+    }
+  }
+
+  void _openImageViewer(List<String> images, int initialIndex) {
+    final validImages = images
+        .map((image) => image.trim())
+        .where((image) => image.isNotEmpty)
+        .toList(growable: false);
+    if (validImages.isEmpty) {
+      return;
+    }
+
+    final startIndex = initialIndex.clamp(0, validImages.length - 1);
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (context) {
+        return _ProductImageViewer(
+          images: validImages,
+          initialIndex: startIndex,
+        );
+      },
+    );
   }
 
   ProductVariantModel? get _selectedVariant {
@@ -230,9 +267,43 @@ class _ProductScreenState extends State<ProductScreen> {
     return product.variants.first;
   }
 
+  Future<void> _openProduct(ProductModel product) async {
+    await guardAdultProductAction(
+      context: context,
+      app: _app,
+      product: product,
+      onAllowed: () {
+        if (!mounted) {
+          return;
+        }
+        context.push('/product/${product.routeId}');
+      },
+    );
+  }
+
+  Future<void> _confirmAdultOnPage(ProductModel product) async {
+    final allowed = await ensureAdultContentAccess(
+      context: context,
+      app: _app,
+      product: product,
+    );
+    if (!allowed || !mounted) {
+      return;
+    }
+    setState(() {});
+  }
+
   Future<void> _addToCart() async {
     final product = _product;
     if (product == null) {
+      return;
+    }
+    final allowed = await ensureAdultContentAccess(
+      context: context,
+      app: _app,
+      product: product,
+    );
+    if (!allowed) {
       return;
     }
     final variant = _selectedVariant;
@@ -307,6 +378,129 @@ class _ProductScreenState extends State<ProductScreen> {
     final selectedVariant = _selectedVariant;
     final inStock = selectedVariant?.inStock ?? true;
     final visibleRelated = _visibleRelatedProducts;
+    final isAdultLocked = isAdultProduct(product) && !canShowAdultContent(_app);
+
+    if (isAdultLocked) {
+      return Container(
+        color: const Color(0xFFF2F2F7),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0x1F3C3C43)),
+                  ),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () => context.pop(),
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      size: 18,
+                      color: Color(0xFF7B2CF5),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Товар для взрослых',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Color(0xFF111827),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0x1F3C3C43)),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: 84,
+                    height: 84,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3E8FF),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Icon(
+                      Icons.lock_person_rounded,
+                      size: 44,
+                      color: Color(0xFF7B2CF5),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '${product.price.toStringAsFixed(0)} сом',
+                    style: const TextStyle(
+                      color: Color(0xFF7B2CF5),
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Подтвердите возраст',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFF111827),
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Этот товар доступен только пользователям старше 18 лет. Вам есть 18 лет?',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 14,
+                      height: 1.4,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: () => unawaited(_confirmAdultOnPage(product)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF7B2CF5),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      child: const Text('Да, мне есть 18'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       color: const Color(0xFFF2F2F7),
@@ -384,22 +578,48 @@ class _ProductScreenState extends State<ProductScreen> {
                       ),
                     );
                   }
-                  return ClipRRect(
-                    borderRadius: BorderRadius.circular(24),
-                    child: Image.network(
-                      images[index],
-                      fit: BoxFit.cover,
-                      filterQuality: FilterQuality.low,
-                      cacheWidth: 1024,
-                      cacheHeight: 900,
-                      frameBuilder: (context, child, frame, wasSyncLoaded) {
-                        if (wasSyncLoaded || frame != null) {
-                          return child;
-                        }
-                        return Container(color: const Color(0xFFF2F2F7));
-                      },
-                      errorBuilder: (_, __, ___) => Container(
-                        color: const Color(0xFFF2F2F7),
+                  return GestureDetector(
+                    onTap: () => _openImageViewer(images, index),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.network(
+                            images[index],
+                            fit: BoxFit.cover,
+                            filterQuality: FilterQuality.low,
+                            cacheWidth: 1024,
+                            cacheHeight: 900,
+                            frameBuilder:
+                                (context, child, frame, wasSyncLoaded) {
+                              if (wasSyncLoaded || frame != null) {
+                                return child;
+                              }
+                              return Container(color: const Color(0xFFF2F2F7));
+                            },
+                            errorBuilder: (_, __, ___) => Container(
+                              color: const Color(0xFFF2F2F7),
+                            ),
+                          ),
+                          Positioned(
+                            right: 12,
+                            bottom: 12,
+                            child: Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.46),
+                                borderRadius: BorderRadius.circular(19),
+                              ),
+                              child: const Icon(
+                                Icons.open_in_full_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   );
@@ -565,14 +785,24 @@ class _ProductScreenState extends State<ProductScreen> {
                   return ProductCardWidget(
                     product: related,
                     isFavorite: _app.favorites.isFavorite(related.id),
-                    onOpen: () => context.push('/product/${related.routeId}'),
+                    isAdultRestricted: isAdultProduct(related),
+                    canShowAdultContent: canShowAdultContent(_app),
+                    onOpen: () => unawaited(_openProduct(related)),
                     onToggleFavorite: () =>
                         _app.favorites.toggleProduct(related),
                     onAddToCart: () async {
+                      final allowed = await ensureAdultContentAccess(
+                        context: context,
+                        app: _app,
+                        product: related,
+                      );
+                      if (!allowed) {
+                        return;
+                      }
                       final added = _app.cart
                           .addProduct(related, maxQuantity: related.stock);
                       if (!added && mounted) {
-                        context.push(
+                        this.context.push(
                             '/auth?redirect=${Uri.encodeComponent('/product/${related.routeId}')}');
                       }
                     },
@@ -581,6 +811,213 @@ class _ProductScreenState extends State<ProductScreen> {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProductImageViewer extends StatefulWidget {
+  const _ProductImageViewer({
+    required this.images,
+    required this.initialIndex,
+  });
+
+  final List<String> images;
+  final int initialIndex;
+
+  @override
+  State<_ProductImageViewer> createState() => _ProductImageViewerState();
+}
+
+class _ProductImageViewerState extends State<_ProductImageViewer> {
+  late final PageController _controller;
+  late int _index;
+  double _verticalDragOffset = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex;
+    _controller = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final backgroundOpacity =
+        (1 - (_verticalDragOffset.abs() / 360)).clamp(0.35, 1.0);
+    final imageScale =
+        (1 - (_verticalDragOffset.abs() / 1400)).clamp(0.88, 1.0);
+
+    return Dialog.fullscreen(
+      backgroundColor: Colors.black.withValues(alpha: backgroundOpacity),
+      child: SafeArea(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onVerticalDragUpdate: (details) {
+            final nextOffset =
+                (_verticalDragOffset + details.delta.dy).clamp(0.0, 420.0);
+            if (nextOffset == _verticalDragOffset) {
+              return;
+            }
+            setState(() {
+              _verticalDragOffset = nextOffset;
+            });
+          },
+          onVerticalDragEnd: (details) {
+            final velocity = details.primaryVelocity ?? 0;
+            if (_verticalDragOffset > 120 || velocity > 700) {
+              Navigator.of(context).pop();
+              return;
+            }
+            setState(() {
+              _verticalDragOffset = 0;
+            });
+          },
+          child: Stack(
+            children: [
+              AnimatedSlide(
+                duration: _verticalDragOffset == 0
+                    ? const Duration(milliseconds: 180)
+                    : Duration.zero,
+                curve: Curves.easeOutCubic,
+                offset: Offset(0, _verticalDragOffset / 420),
+                child: AnimatedScale(
+                  duration: _verticalDragOffset == 0
+                      ? const Duration(milliseconds: 180)
+                      : Duration.zero,
+                  curve: Curves.easeOutCubic,
+                  scale: imageScale,
+                  child: PageView.builder(
+                    controller: _controller,
+                    itemCount: widget.images.length,
+                    onPageChanged: (value) => setState(() => _index = value),
+                    itemBuilder: (context, index) {
+                      final imageUrl = widget.images[index];
+                      return InteractiveViewer(
+                        minScale: 1,
+                        maxScale: 4,
+                        child: Center(
+                          child: Image.network(
+                            imageUrl,
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.medium,
+                            loadingBuilder: (context, child, progress) {
+                              if (progress == null) {
+                                return child;
+                              }
+                              return const Center(
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                ),
+                              );
+                            },
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.broken_image_outlined,
+                              color: Colors.white70,
+                              size: 52,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 12,
+                right: 12,
+                child: IconButton.filled(
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.white.withValues(alpha: 0.18),
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 18,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 120),
+                  opacity: _verticalDragOffset > 24 ? 0 : 1,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.46),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Text(
+                          '${_index + 1} / ${widget.images.length}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (widget.images.length > 1) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children:
+                              List.generate(widget.images.length, (index) {
+                            final active = _index == index;
+                            return AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              margin: const EdgeInsets.symmetric(horizontal: 3),
+                              height: 6,
+                              width: active ? 20 : 6,
+                              decoration: BoxDecoration(
+                                color: active
+                                    ? Colors.white
+                                    : Colors.white.withValues(alpha: 0.42),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            );
+                          }),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 14,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 120),
+                    opacity: _verticalDragOffset > 16 ? 1 : 0,
+                    child: const Text(
+                      'Отпустите, чтобы закрыть',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

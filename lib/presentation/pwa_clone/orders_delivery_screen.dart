@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -220,10 +220,13 @@ class _OrderCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           ...order.items.map((item) {
+            final canShowAdult =
+                AppStore.instance.adultAgeConfirmation.canShowAdultContent;
+            final isAdultLocked = item.isAdultRestricted && !canShowAdult;
             return Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: Text(
-                '- ${item.title} x${item.quantity}',
+                '- ${isAdultLocked ? 'Товар для взрослых' : item.title} x${item.quantity}',
                 style: const TextStyle(
                   color: Color(0xFF4B5563),
                   fontSize: 13,

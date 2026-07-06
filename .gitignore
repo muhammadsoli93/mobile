@@ -47,10 +47,22 @@ app.*.map.json
 android/key.properties
 android/app/*.jks
 android/app/*.keystore
+android/keystore_credentials.txt
 
 # Local workspace and temporary files
 *.code-workspace
 tmp_*
+_tmp_*.py
 tmp_api_check/
 tmp_server_patch/
+adb_debug/
+backend_admin_quick_params.patch
 kumarket.net.nginx.new
+
+# Local project passport and generated PDF artifacts
+docs/kumarket_project_passport.pdf
+docs/kumarket_private_access_graph.pdf
+docs/kumarket_project_passport.html
+docs/create_kumarket_passport_pdf.ps1
+docs/passport_pages/
+docs/edge-pdf-profile*/
