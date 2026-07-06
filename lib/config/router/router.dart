@@ -1,5 +1,6 @@
-﻿import 'package:go_router/go_router.dart';
-import 'package:flutter/material.dart';
+﻿import 'dart:io' show Platform;
+import 'package:go_router/go_router.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:kumarket/presentation/pwa_clone/auth_profile_screen.dart';
 import 'package:kumarket/presentation/pwa_clone/cart_checkout_screen.dart';
 import 'package:kumarket/presentation/pwa_clone/home_catalog_screen.dart';
@@ -20,10 +21,13 @@ String _resolveInitialLocation() {
   return '/';
 }
 
-CustomTransitionPage<void> _pwaPage({
+Page<void> _pwaPage({
   required GoRouterState state,
   required Widget child,
 }) {
+  if (Platform.isIOS) {
+    return CupertinoPage<void>(key: state.pageKey, child: child);
+  }
   return CustomTransitionPage<void>(
     key: state.pageKey,
     transitionDuration: const Duration(milliseconds: 220),
